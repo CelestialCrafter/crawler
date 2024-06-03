@@ -32,8 +32,16 @@ func writeTar(tw *tar.Writer, name string, data []byte) error {
 	return nil
 }
 
-func chooseStartUrls() ([]*url.URL, error) {
+func mapify[T comparable](slice []T) map[T]struct{} {
+	mapped := map[T]struct{}{}
+	for _, e := range slice {
+		mapped[e] = struct{}{}
+	}
 
+	return mapped
+}
+
+func chooseStartUrls() (map[*url.URL]struct{}, error) {
 	var err error
 	if common.Options.Recover {
 		_, err = os.Stat(common.Options.CrawledListPath)
@@ -43,7 +51,11 @@ func chooseStartUrls() ([]*url.URL, error) {
 
 	if errors.Is(err, os.ErrNotExist) {
 		log.Info("using initial urls")
-		return stringsToUrls(common.Options.InitialPages)
+		urlsSlice, err := stringsToUrls(common.Options.InitialPages)
+		if err != nil {
+			return nil, err
+		}
+		return mapify(urlsSlice), nil
 	}
 
 	if err != nil {
@@ -62,7 +74,7 @@ func chooseStartUrls() ([]*url.URL, error) {
 	if err != nil {
 		return nil, err
 	}
-	return frontier, nil
+	return mapify(frontier), nil
 }
 
 func initializeCrawledList() (map[*url.URL]struct{}, error) {

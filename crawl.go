@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/CelestialCrafter/crawler/common"
 	"github.com/CelestialCrafter/crawler/parsers"
@@ -19,8 +20,13 @@ type UrlsErr struct {
 	err      error
 }
 
+func newCrawlLogger(u *url.URL) *log.Logger {
+	return log.WithPrefix("crawler").With("url", u)
+}
+
 func crawl(u *url.URL, parser parsers.Parser, tw *tar.Writer) ([]*url.URL, error) {
-	log.Info("crawling url", "url", u)
+	start := time.Now()
+	crawlerLog := newCrawlLogger(u)
 
 	htm, err := parser.Fetch(u)
 	if err != nil {
@@ -34,7 +40,7 @@ func crawl(u *url.URL, parser parsers.Parser, tw *tar.Writer) ([]*url.URL, error
 
 	encodedPath := base64.URLEncoding.EncodeToString([]byte(u.String()))
 	writeTar(tw, fmt.Sprintf("%s/%s.txt", u.Hostname(), encodedPath), text)
-	log.Info("wrote data to tar", "url", u)
+	crawlerLog.Info("crawled page", "urls", len(urls), "kb", len(htm)/1000, "duration", time.Since(start))
 
 	return urls, nil
 }
@@ -46,7 +52,7 @@ func crawlItteration(frontier map[*url.URL]struct{}, parser parsers.Parser, tw *
 	guard := make(chan struct{}, common.Options.MaxConcurrentCrawlers)
 	var wg sync.WaitGroup
 
-	for u, _ := range frontier {
+	for u := range frontier {
 		_, ok := (*crawledList)[u]
 		if ok {
 			log.Debug("already crawled url", "url", u)

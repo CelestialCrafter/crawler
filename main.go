@@ -43,12 +43,8 @@ func main() {
 	}
 
 	// logging
-	logger := log.NewWithOptions(os.Stderr, log.Options{
-		ReportTimestamp: true,
-		Level:           log.DebugLevel,
-	})
+	logger := log.NewWithOptions(os.Stderr, common.LogOptions)
 	log.SetDefault(logger)
-	log.SetReportCaller(true)
 
 	// init stuff
 	startingUrls, err := chooseStartUrls()
@@ -76,7 +72,7 @@ func main() {
 
 	// crawl loop
 	parser := parsers.NewBasic()
-	frontier := map[*url.URL]struct{}{}
+	frontier := startingUrls
 
 	for i := 0; i < common.Options.CrawlDepth || common.Options.CrawlDepth < 1; i++ {
 

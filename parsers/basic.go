@@ -16,29 +16,42 @@ import (
 )
 
 type Basic struct {
+	client *http.Client
+	logger *log.Logger
 }
 
 func NewBasic() Basic {
-	return Basic{}
+	return Basic{
+		client: &http.Client{},
+		logger: log.WithPrefix("parser/basic"),
+	}
 }
 
-func (p Basic) Fetch(url *url.URL) ([]byte, error) {
+func (p Basic) Fetch(u *url.URL) ([]byte, error) {
 	ctx, cancel := context.WithCancel(context.Background())
+	finished := make(chan bool, 1)
+
 	go func() {
 		time.Sleep(common.Options.RequestTimeout)
-		log.Warn("connection timed out", "url", url)
-		cancel()
+		select {
+		case <-finished:
+			return
+		default:
+			p.logger.Warn("connection timed out", "url", u)
+			cancel()
+		}
 	}()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 	if err != nil {
 		return nil, err
 	}
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := p.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
+	finished <- true
 
 	bodyBytes, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -89,14 +102,14 @@ func (p Basic) ParsePage(data []byte, original *url.URL) (links []*url.URL, text
 
 				url, err := url.Parse(string(href))
 				if err != nil {
-					log.Warn("could not parse url", "error", err, "href", string(href))
+					p.logger.Warn("could not parse url", "error", err, "href", string(href))
 					continue
 				}
 
 				url = original.ResolveReference(url)
 
 				if !slices.Contains([]string{"http", "https"}, url.Scheme) {
-					log.Debug("url did not match scheme whitelist", "url", url)
+					p.logger.Debug("url did not match scheme whitelist", "url", url)
 					continue
 				}
 
