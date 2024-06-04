@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/log"
 
 	"github.com/CelestialCrafter/crawler/common"
-	"github.com/CelestialCrafter/crawler/parsers"
+	"github.com/CelestialCrafter/crawler/parsers/basic"
 )
 
 func stringsToUrls(urlsStrings []string) ([]*url.URL, error) {
@@ -71,18 +71,12 @@ func main() {
 	defer cw.Close()
 
 	// crawl loop
-	parser := parsers.NewBasic()
+	parser := basic.New()
 	frontier := startingUrls
 
 	for i := 0; i < common.Options.CrawlDepth || common.Options.CrawlDepth < 1; i++ {
-
 		log.Info("running crawling itteration", "i", i)
 		frontier = crawlItteration(frontier, parser, cw, &crawledList)
-
-		if len(frontier) < 1 {
-			log.Warn("no links in new frontier; exiting.", "i", i)
-			break
-		}
 
 		err := os.WriteFile(common.Options.FrontierPath, urlsToBytes(maps.Keys(frontier)), 0644)
 		if err != nil {
@@ -92,6 +86,11 @@ func main() {
 		err = os.WriteFile(common.Options.CrawledListPath, urlsToBytes(maps.Keys(crawledList)), 0644)
 		if err != nil {
 			log.Fatal("unable to write to crawled list", "error", err)
+		}
+
+		if len(frontier) < 1 {
+			log.Warn("no links in new frontier; exiting.", "i", i)
+			break
 		}
 	}
 }

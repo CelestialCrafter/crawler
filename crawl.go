@@ -40,7 +40,7 @@ func crawl(u *url.URL, parser parsers.Parser, tw *tar.Writer) ([]*url.URL, error
 
 	encodedPath := base64.URLEncoding.EncodeToString([]byte(u.String()))
 	writeTar(tw, fmt.Sprintf("%s/%s.txt", u.Hostname(), encodedPath), text)
-	crawlerLog.Info("crawled page", "urls", len(urls), "kb", len(htm)/1000, "duration", time.Since(start))
+	crawlerLog.Info("crawled page", "urls", len(urls), "kb", float32(len(htm))/1000, "duration", time.Since(start))
 
 	return urls, nil
 }
