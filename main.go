@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"net/url"
 	"os"
+	"runtime/pprof"
+	"time"
 
 	"golang.org/x/exp/maps"
 
@@ -41,12 +43,31 @@ func main() {
 	if err != nil {
 		log.Fatal("unable to load options", "error", err)
 	}
+	common.RecalculateLogOptions()
+
+	// profiling
+	if common.Options.EnableProfiler {
+		pf, err := os.Create("data/crawler.prof")
+		if err != nil {
+			log.Fatal("could not open profiler file", "error", err)
+			return
+		}
+
+		pprof.StartCPUProfile(pf)
+		defer pprof.StopCPUProfile()
+
+	}
 
 	// logging
 	logger := log.NewWithOptions(os.Stderr, common.LogOptions)
 	log.SetDefault(logger)
 
 	// init stuff
+	err = os.MkdirAll("data/robots", 0644)
+	if err != nil {
+		log.Fatal("unable to create data/ and/or data/robots/ directories", "error", err)
+	}
+
 	startingUrls, err := chooseStartUrls()
 	if err != nil {
 		log.Fatal("unable to get starting urls", "error", err)
@@ -73,9 +94,11 @@ func main() {
 	// crawl loop
 	parser := basic.New()
 	frontier := startingUrls
+	_ = parser
 
 	for i := 0; i < common.Options.CrawlDepth || common.Options.CrawlDepth < 1; i++ {
 		log.Info("running crawling itteration", "i", i)
+		start := time.Now()
 		frontier = crawlItteration(frontier, parser, cw, &crawledList)
 
 		err := os.WriteFile(common.Options.FrontierPath, urlsToBytes(maps.Keys(frontier)), 0644)
@@ -87,6 +110,8 @@ func main() {
 		if err != nil {
 			log.Fatal("unable to write to crawled list", "error", err)
 		}
+
+		log.Info("completed itteration", "duration", time.Since(start))
 
 		if len(frontier) < 1 {
 			log.Warn("no links in new frontier; exiting.", "i", i)

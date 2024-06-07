@@ -23,6 +23,8 @@ func findHref(z *html.Tokenizer) ([]byte, bool) {
 	return nil, false
 }
 
+// note to self: don't put a context canceled check on this function
+// the time it takes to parse explodes
 func (p Basic) parseHtml(data []byte, original *url.URL) (links []*url.URL, text []byte, err error) {
 	z := html.NewTokenizer(bytes.NewReader(data))
 

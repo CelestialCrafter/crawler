@@ -13,10 +13,18 @@ type OptionsStructure struct {
 	CrawledTarPath  string
 
 	LogLevel              log.Level
+	UserAgent             string
 	MaxConcurrentCrawlers int
 	CrawlDepth            int
 	Recover               bool
-	RequestTimeout        time.Duration
+	CrawlTimeout          time.Duration
+	DefaultCrawlDelay     time.Duration
+	RespectRobots         bool
+
+	EnableProfiler bool
+	ProfilerPath   string
+	EnableMetrics  bool
+	StatsdURI      string
 
 	InitialPages []string
 }
@@ -33,6 +41,7 @@ func LoadOptions() (OptionsStructure, error) {
 
 	pathsSection := optionsIni.Section("paths")
 	settingsSection := optionsIni.Section("settings")
+	performanceSection := optionsIni.Section("performance")
 	blankSection := optionsIni.Section("")
 
 	logLevel, err := log.ParseLevel(settingsSection.Key("log_level").MustString("info"))
@@ -44,13 +53,22 @@ func LoadOptions() (OptionsStructure, error) {
 		CrawledListPath: pathsSection.Key("crawled_list_path").MustString("data/crawled-list"),
 		FrontierPath:    pathsSection.Key("frontier_path").MustString("data/frontier"),
 		CrawledTarPath:  pathsSection.Key("crawled_tar_path").MustString("data/crawled.tar"),
-		InitialPages:    blankSection.Key("initial").Strings(","),
 
 		LogLevel:              logLevel,
+		UserAgent:             settingsSection.Key("user_agent").MustString("Mozilla/5.0 (compatible; Crawler/1.0; +http://www.google.com/bot.html)"),
 		MaxConcurrentCrawlers: settingsSection.Key("max_concurrent_crawlers").MustInt(20),
 		CrawlDepth:            settingsSection.Key("crawl_depth").MustInt(0),
 		Recover:               settingsSection.Key("recover").MustBool(true),
-		RequestTimeout:        settingsSection.Key("request_timeout").MustDuration(10 * time.Second),
+		CrawlTimeout:          settingsSection.Key("crawl_timeout").MustDuration(10 * time.Second),
+		DefaultCrawlDelay:     settingsSection.Key("default_crawl_delay").MustDuration(500 * time.Millisecond),
+		RespectRobots:         settingsSection.Key("respect_robots").MustBool(true),
+
+		EnableProfiler: settingsSection.Key("enable_profiler").MustBool(false),
+		ProfilerPath:   performanceSection.Key("profiler_path").MustString("data/crawler.prof"),
+		EnableMetrics:  settingsSection.Key("enable_metrics").MustBool(false),
+		StatsdURI:      performanceSection.Key("statsd_uri").MustString("localhost:8125"),
+
+		InitialPages: blankSection.Key("initial").Strings(","),
 	}
 
 	return Options, nil

@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
-	"time"
+	"strings"
 
 	"github.com/CelestialCrafter/crawler/common"
 	"github.com/charmbracelet/log"
@@ -28,33 +28,21 @@ func New() Basic {
 	}
 }
 
-func (p Basic) Fetch(u *url.URL) ([]byte, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	finished := make(chan bool, 1)
-
-	go func() {
-		time.Sleep(common.Options.RequestTimeout)
-		select {
-		case <-finished:
-			return
-		default:
-			p.logger.Warn("connection timed out", "url", u)
-			cancel()
-		}
-	}()
-
+func (p Basic) Fetch(u *url.URL, ctx context.Context) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 	if err != nil {
 		return nil, err
 	}
 
+	req.Header.Add("User-Agent", common.Options.UserAgent)
+
 	res, err := p.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
-	finished <- true
 
 	contentType := res.Header.Get("content-type")
+	contentType = strings.Split(contentType, ";")[0]
 	if !slices.Contains([]string{
 		"text/html",
 		"text/plain",
@@ -78,7 +66,7 @@ func (p Basic) Fetch(u *url.URL) ([]byte, error) {
 	return append(mime, bodyBytes...), err
 }
 
-func (p Basic) ParsePage(data []byte, original *url.URL) (links []*url.URL, text []byte, err error) {
+func (p Basic) ParsePage(data []byte, original *url.URL, ctx context.Context) (links []*url.URL, text []byte, err error) {
 	mime := string(bytes.Trim(data[:MAX_MIME_BYTES], "\x00"))
 	data = data[MAX_MIME_BYTES:]
 
