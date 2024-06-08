@@ -17,6 +17,7 @@ import (
 	"github.com/CelestialCrafter/crawler/parsers"
 	"github.com/benjaminestes/robots"
 	"github.com/charmbracelet/log"
+	"github.com/hashicorp/go-metrics"
 )
 
 type UrlsErr struct {
@@ -37,9 +38,9 @@ func encodeUrl(urlString string) string {
 	return base64.URLEncoding.EncodeToString([]byte(urlString))
 }
 
-func crawlAllowed(u *url.URL, crawledList *map[*url.URL]struct{}, ctx context.Context) error {
+func crawlAllowed(u *url.URL, crawledList *map[string]struct{}, ctx context.Context) error {
 	// already crawled check
-	_, ok := (*crawledList)[u]
+	_, ok := (*crawledList)[u.String()]
 	if ok {
 		return errors.New("already crawled url")
 	}
@@ -76,8 +77,8 @@ func crawlAllowed(u *url.URL, crawledList *map[*url.URL]struct{}, ctx context.Co
 		}
 		res.Body.Close()
 
-		// robots.From will panic if the length is 0
-		if len(bodyBytes) < 1 {
+		// robots.From will panic if the length is 0, and < 1 didnt work so im adding a little minimum
+		if len(bodyBytes) < 10 {
 			return nil
 		}
 
@@ -107,27 +108,26 @@ func sleepUntilCrawlable(u *url.URL, ctx context.Context) {
 	crawlDelay, ok := crawlDelayMap[u.Host]
 	comparison := time.Now().Compare(crawlDelay) >= 0
 
+	// @FIX possible bug here? it sleeps and then locks until an already passed time
 	if !ok || comparison {
 		crawlDelayMap[u.Host] = time.Now().Add(common.Options.DefaultCrawlDelay)
 	}
 
 	crawlDelay = crawlDelayMap[u.Host]
+	timeUntil := time.Until(crawlDelay)
 	if ok && !comparison {
-		time.Sleep(time.Until(crawlDelay))
+		time.Sleep(timeUntil)
 	}
 
-	// lock host mutex till crawl delay finishes || context canceled
+	// lock host mutex till crawl delay finishes
 	go func() {
-		crawlerLog.Debug("locking host until crawl delay", "host", u.Host, "delay", time.Until(crawlDelay))
-		timeUntil := time.Until(crawlDelay)
-		timer := time.NewTimer(timeUntil)
-		<-timer.C
+		crawlerLog.Debug("locking host until crawl delay", "host", u.Host, "delay", timeUntil)
+		time.Sleep(timeUntil)
 		hostMutex.Unlock()
 	}()
 }
 
 func crawl(u *url.URL, parser parsers.Parser, tw *tar.Writer, ctx context.Context) ([]*url.URL, error) {
-	// @TODO metrics
 	start := time.Now()
 	crawlerLog := common.LoggerFromContext(ctx)
 
@@ -135,25 +135,27 @@ func crawl(u *url.URL, parser parsers.Parser, tw *tar.Writer, ctx context.Contex
 	if err != nil {
 		return nil, err
 	}
-	crawlerLog.Debug("fetching finished", "duration", time.Since(start))
+	metrics.MeasureSince([]string{"fetch"}, start)
 	kb := float32(len(htm)) / 1000
 
 	parseStart := time.Now()
-	// @TODO only parse if neccesary (discard parsing on pdfs, images, ect)
 	urls, text, err := parser.ParsePage(htm, u, ctx)
 	if err != nil {
 		return nil, err
 	}
-	crawlerLog.Debug("parsing finished", "duration", time.Since(parseStart))
+	metrics.MeasureSince([]string{"parse"}, parseStart)
 
 	// @TODO change .txt to match the mime of the page (support .pdfs, .jpg/.png, ect)
 	writeTar(tw, fmt.Sprintf("%s/%s.txt", u.Hostname(), encodeUrl(u.String())), text)
-	crawlerLog.Info("crawled page", "urls", len(urls), "kb", kb, "duration", time.Since(start))
+	crawlerLog.Debug("crawled page", "urls", len(urls), "kb", kb, "duration", time.Since(start))
+
+	// @TODO use a domain label when you fix your metrics... stupid..
+	metrics.IncrCounter([]string{"crawled_count"}, 1)
 
 	return urls, nil
 }
 
-func crawlItteration(frontier map[*url.URL]struct{}, parser parsers.Parser, tw *tar.Writer, crawledList *map[*url.URL]struct{}) map[*url.URL]struct{} {
+func crawlItteration(frontier map[*url.URL]struct{}, parser parsers.Parser, tw *tar.Writer, crawledList *map[string]struct{}) map[*url.URL]struct{} {
 	// @TODO use sitemap from robots.txt
 	newFrontier := map[*url.URL]struct{}{}
 
@@ -211,7 +213,7 @@ func crawlItteration(frontier map[*url.URL]struct{}, parser parsers.Parser, tw *
 			continue
 		}
 
-		(*crawledList)[original] = struct{}{}
+		(*crawledList)[original.String()] = struct{}{}
 		for _, u := range urls {
 			newFrontier[u] = struct{}{}
 		}

@@ -77,8 +77,8 @@ func chooseStartUrls() (map[*url.URL]struct{}, error) {
 	return mapify(frontier), nil
 }
 
-func initializeCrawledList() (map[*url.URL]struct{}, error) {
-	crawledList := map[*url.URL]struct{}{}
+func initializeCrawledList() (map[string]struct{}, error) {
+	crawledList := map[string]struct{}{}
 
 	var err error
 	if common.Options.Recover {
@@ -94,12 +94,7 @@ func initializeCrawledList() (map[*url.URL]struct{}, error) {
 		}
 
 		for _, urlString := range strings.Split(string(crawledListBytes), "\n") {
-			url, err := url.Parse(urlString)
-			if err != nil {
-				log.Warn("unable to parse url", "error", err, "url", url)
-				continue
-			}
-			crawledList[url] = struct{}{}
+			crawledList[urlString] = struct{}{}
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, err

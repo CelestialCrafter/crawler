@@ -5,11 +5,13 @@ import (
 	"net/url"
 	"os"
 	"runtime/pprof"
+	"strings"
 	"time"
 
 	"golang.org/x/exp/maps"
 
 	"github.com/charmbracelet/log"
+	"github.com/hashicorp/go-metrics"
 
 	"github.com/CelestialCrafter/crawler/common"
 	"github.com/CelestialCrafter/crawler/parsers/basic"
@@ -55,8 +57,30 @@ func main() {
 
 		pprof.StartCPUProfile(pf)
 		defer pprof.StopCPUProfile()
-
 	}
+
+	var crawlerSink metrics.MetricSink
+	var perfSink metrics.MetricSink
+	crawlerSink = new(metrics.BlackholeSink)
+	perfSink = new(metrics.BlackholeSink)
+
+	if common.Options.EnableMetrics {
+		crawlerSink, err = metrics.NewStatsiteSink(common.Options.StatsdURI)
+		if err != nil {
+			log.Fatal("unable to create statsite sink (crawler)", "error", err)
+		}
+
+		perfSink, err = metrics.NewStatsiteSink(common.Options.StatsdURI)
+		if err != nil {
+			log.Fatal("unable to create statsite sink (performance)", "error", err)
+		}
+	}
+
+	perfMetricsConfig := metrics.DefaultConfig("performance")
+	perfMetricsConfig.EnableServiceLabel = false
+	perfMetricsConfig.EnableHostname = false
+	metrics.New(perfMetricsConfig, perfSink)
+	metrics.NewGlobal(metrics.DefaultConfig("crawler"), crawlerSink)
 
 	// logging
 	logger := log.NewWithOptions(os.Stderr, common.LogOptions)
@@ -106,7 +130,7 @@ func main() {
 			log.Fatal("unable to write to frontier", "error", err)
 		}
 
-		err = os.WriteFile(common.Options.CrawledListPath, urlsToBytes(maps.Keys(crawledList)), 0644)
+		err = os.WriteFile(common.Options.CrawledListPath, []byte(strings.Join(maps.Keys(crawledList), "\n")), 0644)
 		if err != nil {
 			log.Fatal("unable to write to crawled list", "error", err)
 		}

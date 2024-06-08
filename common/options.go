@@ -63,9 +63,9 @@ func LoadOptions() (OptionsStructure, error) {
 		DefaultCrawlDelay:     settingsSection.Key("default_crawl_delay").MustDuration(500 * time.Millisecond),
 		RespectRobots:         settingsSection.Key("respect_robots").MustBool(true),
 
-		EnableProfiler: settingsSection.Key("enable_profiler").MustBool(false),
+		EnableProfiler: performanceSection.Key("enable_profiler").MustBool(false),
 		ProfilerPath:   performanceSection.Key("profiler_path").MustString("data/crawler.prof"),
-		EnableMetrics:  settingsSection.Key("enable_metrics").MustBool(false),
+		EnableMetrics:  performanceSection.Key("enable_metrics").MustBool(false),
 		StatsdURI:      performanceSection.Key("statsd_uri").MustString("localhost:8125"),
 
 		InitialPages: blankSection.Key("initial").Strings(","),
