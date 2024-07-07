@@ -96,8 +96,9 @@ func main() {
 	var queueCopy []*url.URL
 	newUrls := make([]string, 0)
 
+	var start time.Time
 	for {
-		start := time.Now()
+		start = time.Now()
 		var wg sync.WaitGroup
 
 		err = loadNewBatch(vk, &queue)
@@ -131,11 +132,7 @@ func main() {
 			}(i)
 		}
 
-		start = time.Now()
 		wg.Wait()
-		log.Warn("waitgroup finished", "duration", time.Since(start))
-
-		start = time.Now()
 		err := cleanupBatch(vk, queueCopy)
 		if err != nil {
 			log.Fatal("could not clean up batch", "error", err)
@@ -146,6 +143,6 @@ func main() {
 			log.Fatal("could not write aggregated data", "error", err)
 		}
 
-		log.Info("cleanup finished", "duration", time.Since(start))
+		log.Info("batch finished", "duration", time.Since(start))
 	}
 }
