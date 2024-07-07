@@ -2,14 +2,14 @@ package main
 
 import (
 	"archive/tar"
-	"errors"
-	"net/url"
-	"os"
-	"strings"
+	"context"
 	"time"
 
-	"github.com/CelestialCrafter/crawler/common"
 	"github.com/charmbracelet/log"
+	"github.com/hashicorp/go-metrics"
+	"github.com/valkey-io/valkey-go"
+
+	"github.com/CelestialCrafter/crawler/common"
 )
 
 func writeTar(tw *tar.Writer, name string, data []byte) error {
@@ -32,73 +32,69 @@ func writeTar(tw *tar.Writer, name string, data []byte) error {
 	return nil
 }
 
-func mapify[T comparable](slice []T) map[T]struct{} {
-	mapped := map[T]struct{}{}
-	for _, e := range slice {
-		mapped[e] = struct{}{}
+func startMetrics() {
+	var crawlerSink metrics.MetricSink
+	var perfSink metrics.MetricSink
+
+	if common.Options.EnableMetrics {
+		var err error
+		crawlerSink, err = metrics.NewStatsiteSink(common.Options.StatsdURI)
+		if err != nil {
+			log.Fatal("unable to create statsite sink (crawler)", "error", err)
+		}
+
+		perfSink, err = metrics.NewStatsiteSink(common.Options.StatsdURI)
+		if err != nil {
+			log.Fatal("unable to create statsite sink (performance)", "error", err)
+		}
+	} else {
+		crawlerSink = new(metrics.BlackholeSink)
+		perfSink = new(metrics.BlackholeSink)
 	}
 
-	return mapped
+	perfMetricsConfig := metrics.DefaultConfig("performance")
+	perfMetricsConfig.EnableServiceLabel = false
+	perfMetricsConfig.EnableHostname = false
+	_, err := metrics.New(perfMetricsConfig, perfSink)
+	if err != nil {
+		log.Fatal("could not create performance metrics", "error", err)
+	}
+	_, err = metrics.NewGlobal(metrics.DefaultConfig("crawler"), crawlerSink)
+	if err != nil {
+		log.Fatal("could not create crawler metrics", "error", err)
+	}
+
 }
 
-func chooseStartUrls() (map[*url.URL]struct{}, error) {
-	var err error
-	if common.Options.Recover {
-		_, err = os.Stat(common.Options.CrawledListPath)
-	} else {
-		err = os.ErrNotExist
+func populateInitialUrls(vk valkey.Client) error {
+	if len(common.Options.InitialPages) < 1 {
+		log.Warn("no urls in initial urls")
+		return nil
 	}
 
-	if errors.Is(err, os.ErrNotExist) {
-		log.Info("using initial urls")
-		urlsSlice, err := stringsToUrls(common.Options.InitialPages)
-		if err != nil {
-			return nil, err
-		}
-		return mapify(urlsSlice), nil
+	ctx := context.Background()
+	queueLength, err := vk.Do(ctx, vk.B().Scard().Key("queue").Build()).AsInt64()
+	if err != nil {
+		return err
 	}
+
+	if queueLength > 0 && common.Options.Recover {
+		return nil
+	}
+
+	err = vk.Do(
+		context.Background(),
+		vk.
+			B().
+			Sadd().
+			Key("queue").
+			Member(common.Options.InitialPages...).
+			Build(),
+	).Error()
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	log.Info("using frontier urls")
-	urlsBytes, err := os.ReadFile(common.Options.FrontierPath)
-	if err != nil {
-		log.Fatal("unable to read initial sites", "error", err)
-	}
-
-	urlsStrings := strings.Split(string(urlsBytes), "\n")
-
-	frontier, err := stringsToUrls(urlsStrings)
-	if err != nil {
-		return nil, err
-	}
-	return mapify(frontier), nil
-}
-
-func initializeCrawledList() (map[string]struct{}, error) {
-	crawledList := map[string]struct{}{}
-
-	var err error
-	if common.Options.Recover {
-		_, err = os.Stat(common.Options.CrawledListPath)
-	} else {
-		err = os.ErrNotExist
-	}
-
-	if err == nil {
-		crawledListBytes, err := os.ReadFile(common.Options.FrontierPath)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, urlString := range strings.Split(string(crawledListBytes), "\n") {
-			crawledList[urlString] = struct{}{}
-		}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, err
-	}
-
-	return crawledList, nil
+	return nil
 }

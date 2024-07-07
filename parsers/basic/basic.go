@@ -28,8 +28,8 @@ func New() Basic {
 	}
 }
 
-func (p Basic) Fetch(u *url.URL, ctx context.Context) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+func (p Basic) Fetch(u string, ctx context.Context) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (p Basic) ParsePage(data []byte, original *url.URL, ctx context.Context) (l
 		return p.parsePdf(data, original)
 	case "application/rdf":
 	default:
-		p.parseHtml(data, original)
+		return p.parseHtml(data, original)
 	}
 
 	return nil, nil, fmt.Errorf("could not find parse mime type: %v", mime)

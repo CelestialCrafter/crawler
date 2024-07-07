@@ -2,42 +2,34 @@ package main
 
 import (
 	"archive/tar"
+	"context"
 	"net/url"
 	"os"
 	"runtime/pprof"
-	"strings"
+	"sync"
 	"time"
 
-	"golang.org/x/exp/maps"
-
 	"github.com/charmbracelet/log"
-	"github.com/hashicorp/go-metrics"
+
+	"github.com/valkey-io/valkey-go"
 
 	"github.com/CelestialCrafter/crawler/common"
 	"github.com/CelestialCrafter/crawler/parsers/basic"
 )
 
-func stringsToUrls(urlsStrings []string) ([]*url.URL, error) {
-	urls := make([]*url.URL, len(urlsStrings))
-	for i, urlString := range urlsStrings {
-		var err error
-		urls[i], err = url.Parse(urlString)
-		if err != nil {
-			return nil, err
-		}
+func writeNewQueue(vk valkey.Client, newUrls *[]string) error {
+	if len(*newUrls) < 1 {
+		log.Warn("no new urls")
+		return nil
 	}
 
-	return urls, nil
-}
+	vk.Do(context.Background(), vk.
+		B().
+		Sadd().
+		Key("queue").Member(*newUrls...).Build())
 
-func urlsToBytes(urls []*url.URL) []byte {
-	var bytes []byte
-	for _, url := range urls {
-		urlBytes := append([]byte(url.String()), byte('\n'))
-		bytes = append(bytes, urlBytes...)
-	}
-
-	return bytes
+	*newUrls = make([]string, 0)
+	return nil
 }
 
 func main() {
@@ -45,7 +37,11 @@ func main() {
 	if err != nil {
 		log.Fatal("unable to load options", "error", err)
 	}
+
+	// logging
 	common.RecalculateLogOptions()
+	logger := log.NewWithOptions(os.Stderr, common.LogOptions)
+	log.SetDefault(logger)
 
 	// profiling
 	if common.Options.EnableProfiler {
@@ -55,55 +51,34 @@ func main() {
 			return
 		}
 
-		pprof.StartCPUProfile(pf)
+		err = pprof.StartCPUProfile(pf)
+		if err != nil {
+			log.Fatal("could not start cpu profile", "error", err)
+		}
 		defer pprof.StopCPUProfile()
 	}
 
-	var crawlerSink metrics.MetricSink
-	var perfSink metrics.MetricSink
-	crawlerSink = new(metrics.BlackholeSink)
-	perfSink = new(metrics.BlackholeSink)
+	startMetrics()
 
-	if common.Options.EnableMetrics {
-		crawlerSink, err = metrics.NewStatsiteSink(common.Options.StatsdURI)
-		if err != nil {
-			log.Fatal("unable to create statsite sink (crawler)", "error", err)
-		}
-
-		perfSink, err = metrics.NewStatsiteSink(common.Options.StatsdURI)
-		if err != nil {
-			log.Fatal("unable to create statsite sink (performance)", "error", err)
-		}
-	}
-
-	perfMetricsConfig := metrics.DefaultConfig("performance")
-	perfMetricsConfig.EnableServiceLabel = false
-	perfMetricsConfig.EnableHostname = false
-	metrics.New(perfMetricsConfig, perfSink)
-	metrics.NewGlobal(metrics.DefaultConfig("crawler"), crawlerSink)
-
-	// logging
-	logger := log.NewWithOptions(os.Stderr, common.LogOptions)
-	log.SetDefault(logger)
-
-	// init stuff
-	err = os.MkdirAll("data/robots", 0644)
+	// valkey
+	vk, err := valkey.NewClient(valkey.ClientOption{
+		InitAddress: []string{"127.0.0.1:6379"},
+	})
 	if err != nil {
-		log.Fatal("unable to create data/ and/or data/robots/ directories", "error", err)
+		log.Fatal("could not connect to valkey", "error", err)
 	}
 
-	startingUrls, err := chooseStartUrls()
+	defer vk.Close()
+
+	// i/o init
+	err = os.MkdirAll("data/", 0644)
 	if err != nil {
-		log.Fatal("unable to get starting urls", "error", err)
+		log.Fatal("unable to create data/ directory", "error", err)
 	}
 
-	if len(startingUrls) < 1 {
-		log.Warn("no urls in starting urls")
-	}
-
-	crawledList, err := initializeCrawledList()
+	err = populateInitialUrls(vk)
 	if err != nil {
-		log.Fatal("unable to initialize crawled list", "error", err)
+		log.Fatal("unable to populate database with initial urls", "error", err)
 	}
 
 	cf, err := os.Create(common.Options.CrawledTarPath)
@@ -117,29 +92,60 @@ func main() {
 
 	// crawl loop
 	parser := basic.New()
-	frontier := startingUrls
-	_ = parser
+	var queue []*url.URL
+	var queueCopy []*url.URL
+	newUrls := make([]string, 0)
 
-	for i := 0; i < common.Options.CrawlDepth || common.Options.CrawlDepth < 1; i++ {
-		log.Info("running crawling itteration", "i", i)
+	for {
 		start := time.Now()
-		frontier = crawlItteration(frontier, parser, cw, &crawledList)
+		var wg sync.WaitGroup
 
-		err := os.WriteFile(common.Options.FrontierPath, urlsToBytes(maps.Keys(frontier)), 0644)
+		err = loadNewBatch(vk, &queue)
 		if err != nil {
-			log.Fatal("unable to write to frontier", "error", err)
+			log.Fatal("could not load new batches", "error", err)
 		}
 
-		err = os.WriteFile(common.Options.CrawledListPath, []byte(strings.Join(maps.Keys(crawledList), "\n")), 0644)
-		if err != nil {
-			log.Fatal("unable to write to crawled list", "error", err)
-		}
+		queueCopy = queue
 
-		log.Info("completed itteration", "duration", time.Since(start))
-
-		if len(frontier) < 1 {
-			log.Warn("no links in new frontier; exiting.", "i", i)
+		if len(queue) < 1 {
+			log.Warn("no new urls to be crawled; breaking.")
 			break
 		}
+
+		preflight(queue)
+		for i := range common.Options.Workers {
+			wg.Add(1)
+
+			go func(i int) {
+				defer func() {
+					wg.Done()
+				}()
+
+				worker(i, &queue, parser, func(urls []string, s string, b []byte) {
+					newUrls = append(newUrls, urls...)
+					err := writeTar(cw, s, b)
+					if err != nil {
+						log.Error("could not write to tar", "error", err)
+					}
+				})
+			}(i)
+		}
+
+		start = time.Now()
+		wg.Wait()
+		log.Warn("waitgroup finished", "duration", time.Since(start))
+
+		start = time.Now()
+		err := cleanupBatch(vk, queueCopy)
+		if err != nil {
+			log.Fatal("could not clean up batch", "error", err)
+		}
+
+		err = writeNewQueue(vk, &newUrls)
+		if err != nil {
+			log.Fatal("could not write aggregated data", "error", err)
+		}
+
+		log.Info("cleanup finished", "duration", time.Since(start))
 	}
 }

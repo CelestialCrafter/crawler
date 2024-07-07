@@ -6,18 +6,37 @@ import (
 	"io"
 	"net/url"
 	"slices"
+	"strings"
 
 	"golang.org/x/net/html"
 )
 
-func findHref(z *html.Tokenizer) ([]byte, bool) {
+var whitelistedTextTags = []string{
+	"h1",
+	"h2",
+	"h3",
+	"h4",
+	"h5",
+	"h6",
+	"blockquote",
+	"dd",
+	"div",
+	"dl",
+	"dt",
+	"figcaption",
+	"li",
+	"p",
+	"pre",
+}
+
+func findHrefSrc(z *html.Tokenizer) ([]byte, bool) {
 	k, v, more := z.TagAttr()
-	if string(k) == "href" {
+	if slices.Contains([]string{"src", "href"}, string(k)) {
 		return v, true
 	}
 
 	if more {
-		return findHref(z)
+		return findHrefSrc(z)
 	}
 
 	return nil, false
@@ -27,6 +46,7 @@ func findHref(z *html.Tokenizer) ([]byte, bool) {
 // the time it takes to parse explodes
 func (p Basic) parseHtml(data []byte, original *url.URL) (links []*url.URL, text []byte, err error) {
 	z := html.NewTokenizer(bytes.NewReader(data))
+	useText := false
 
 	for {
 		tt := z.Next()
@@ -34,24 +54,33 @@ func (p Basic) parseHtml(data []byte, original *url.URL) (links []*url.URL, text
 		case html.ErrorToken:
 			newErr := z.Err()
 			if errors.Is(newErr, io.EOF) {
+				text = removeExtraWhitespace(text)
 				return
 			}
 
 			err = newErr
 			return
 		case html.TextToken:
-			text = append(text, z.Text()...)
-		case html.StartTagToken, html.EndTagToken:
+			if useText {
+				text = append(text, z.Text()...)
+			}
+		case html.EndTagToken:
 			tn, _ := z.TagName()
-			if len(tn) == 1 && tn[0] == 'a' {
-				href, ok := findHref(z)
+			if slices.Contains(whitelistedTextTags, string(tn)) {
+				useText = false
+			}
+		case html.StartTagToken:
+			tn, _ := z.TagName()
+
+			if slices.Contains([]string{"a", "img"}, string(tn)) {
+				link, ok := findHrefSrc(z)
 				if !ok {
 					continue
 				}
 
-				url, err := url.Parse(string(href))
+				url, err := url.Parse(strings.TrimSpace(string(link)))
 				if err != nil {
-					p.logger.Warn("could not parse url", "error", err, "href", string(href))
+					p.logger.Warn("could not parse url", "error", err, "href", string(link))
 					continue
 				}
 
@@ -67,6 +96,8 @@ func (p Basic) parseHtml(data []byte, original *url.URL) (links []*url.URL, text
 				url.Fragment = ""
 
 				links = append(links, url)
+			} else if slices.Contains(whitelistedTextTags, string(tn)) {
+				useText = true
 			}
 		}
 	}
