@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/log"
 	"github.com/hashicorp/go-metrics"
+	prometheus "github.com/hashicorp/go-metrics/prometheus"
 	"github.com/valkey-io/valkey-go"
 
 	"github.com/CelestialCrafter/crawler/common"
@@ -34,34 +35,22 @@ func writeTar(tw *tar.Writer, name string, data []byte) error {
 
 func startMetrics() {
 	var crawlerSink metrics.MetricSink
-	var perfSink metrics.MetricSink
+	var err error
 
 	if common.Options.EnableMetrics {
-		var err error
-		crawlerSink, err = metrics.NewStatsiteSink(common.Options.StatsdURI)
+		crawlerSink, err = prometheus.NewPrometheusPushSink(common.Options.PrometheusPushAddr, 5*time.Second, "crawler_sink")
 		if err != nil {
-			log.Fatal("unable to create statsite sink (crawler)", "error", err)
-		}
-
-		perfSink, err = metrics.NewStatsiteSink(common.Options.StatsdURI)
-		if err != nil {
-			log.Fatal("unable to create statsite sink (performance)", "error", err)
+			log.Fatal("unable to create prometheus sink (push)", "error", err)
 		}
 	} else {
-		crawlerSink = new(metrics.BlackholeSink)
-		perfSink = new(metrics.BlackholeSink)
+		crawlerSink = &metrics.BlackholeSink{}
 	}
 
-	perfMetricsConfig := metrics.DefaultConfig("performance")
-	perfMetricsConfig.EnableServiceLabel = false
-	perfMetricsConfig.EnableHostname = false
-	_, err := metrics.New(perfMetricsConfig, perfSink)
+	config := metrics.DefaultConfig("crawler")
+	config.EnableRuntimeMetrics = false
+	_, err = metrics.NewGlobal(config, crawlerSink)
 	if err != nil {
-		log.Fatal("could not create performance metrics", "error", err)
-	}
-	_, err = metrics.NewGlobal(metrics.DefaultConfig("crawler"), crawlerSink)
-	if err != nil {
-		log.Fatal("could not create crawler metrics", "error", err)
+		log.Fatal("unable to create crawler metrics", "error", err)
 	}
 
 }

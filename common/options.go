@@ -21,10 +21,14 @@ type OptionsStructure struct {
 	DefaultCrawlDelay time.Duration
 	RespectRobots     bool
 
-	EnableProfiler bool
-	ProfilerPath   string
-	EnableMetrics  bool
-	StatsdURI      string
+	EnablePprof bool
+	PprofPath   string
+
+	EnablePyroscope bool
+	PyroscopeAddr   string
+
+	EnableMetrics      bool
+	PrometheusPushAddr string
 
 	InitialPages []string
 }
@@ -51,7 +55,6 @@ func LoadOptions() (OptionsStructure, error) {
 
 	Options = OptionsStructure{
 		DatabasePath:   pathsSection.Key("database_path").MustString("data/database.db"),
-		FrontierPath:   pathsSection.Key("frontier_path").MustString("data/frontier"),
 		CrawledTarPath: pathsSection.Key("crawled_tar_path").MustString("data/crawled.tar"),
 
 		LogLevel:          logLevel,
@@ -59,14 +62,18 @@ func LoadOptions() (OptionsStructure, error) {
 		Workers:           settingsSection.Key("workers").MustInt(10),
 		BatchSize:         settingsSection.Key("batch_size").MustInt(20),
 		Recover:           settingsSection.Key("recover").MustBool(true),
-		CrawlTimeout:      settingsSection.Key("crawl_timeout").MustDuration(10 * time.Second),
+		CrawlTimeout:      settingsSection.Key("crawl_timeout").MustDuration(5 * time.Second),
 		DefaultCrawlDelay: settingsSection.Key("default_crawl_delay").MustDuration(500 * time.Millisecond),
 		RespectRobots:     settingsSection.Key("respect_robots").MustBool(true),
 
-		EnableProfiler: performanceSection.Key("enable_profiler").MustBool(false),
-		ProfilerPath:   performanceSection.Key("profiler_path").MustString("data/crawler.prof"),
-		EnableMetrics:  performanceSection.Key("enable_metrics").MustBool(false),
-		StatsdURI:      performanceSection.Key("statsd_uri").MustString("localhost:8125"),
+		EnablePprof: performanceSection.Key("enable_pprof").MustBool(false),
+		PprofPath:   performanceSection.Key("pprof_path").MustString("data/crawler.prof"),
+
+		EnablePyroscope: performanceSection.Key("enable_pyroscope").MustBool(false),
+		PyroscopeAddr:   performanceSection.Key("pyroscope_addr").MustString("http://localhost:4040"),
+
+		EnableMetrics:      performanceSection.Key("enable_metrics").MustBool(false),
+		PrometheusPushAddr: performanceSection.Key("prometheus_push_addr").MustString(":9091"),
 
 		// @NOTE length of initial pages MUST be under batch size * workers
 		InitialPages: blankSection.Key("initial").Strings(","),

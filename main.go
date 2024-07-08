@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/log"
+	"github.com/grafana/pyroscope-go"
 
 	"github.com/valkey-io/valkey-go"
 
@@ -44,10 +45,10 @@ func main() {
 	log.SetDefault(logger)
 
 	// profiling
-	if common.Options.EnableProfiler {
-		pf, err := os.Create("data/crawler.prof")
+	if common.Options.EnablePprof {
+		pf, err := os.Create(common.Options.PprofPath)
 		if err != nil {
-			log.Fatal("could not open profiler file", "error", err)
+			log.Fatal("could not open pprof file", "error", err)
 			return
 		}
 
@@ -56,6 +57,18 @@ func main() {
 			log.Fatal("could not start cpu profile", "error", err)
 		}
 		defer pprof.StopCPUProfile()
+	}
+
+	if common.Options.EnablePyroscope {
+		_, err := pyroscope.Start(pyroscope.Config{
+			ApplicationName: "crawler",
+			ServerAddress:   common.Options.PyroscopeAddr,
+			Logger:          pyroscope.StandardLogger,
+			UploadRate:      5 * time.Second,
+		})
+		if err != nil {
+			log.Fatal("unable to start pyroscope", "error", err)
+		}
 	}
 
 	startMetrics()
