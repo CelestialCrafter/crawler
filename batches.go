@@ -30,7 +30,7 @@ func loadNewBatch(vk valkey.Client, queue *[]*url.URL) error {
 	for _, page := range newBatchString {
 		u, err := url.Parse(page)
 		if err != nil {
-			log.Warn("could not parse url", "url", page)
+			log.Warn("unable to parse url", "url", page)
 			continue
 		}
 
@@ -44,13 +44,22 @@ func cleanupBatch(vk valkey.Client, batch []*url.URL) error {
 	ctx := context.Background()
 
 	smoves := make(valkey.Commands, len(batch))
-	for i, page := range batch {
+	for i, u := range batch {
+		metrics.IncrCounterWithLabels(
+			[]string{"crawled_count"},
+			1,
+			[]metrics.Label{{
+				Name:  "domain",
+				Value: u.Hostname(),
+			}},
+		)
+
 		smoves[i] = vk.
 			B().
 			Smove().
 			Source("queue").
 			Destination("crawled").
-			Member(page.String()).
+			Member(u.String()).
 			Build()
 	}
 
@@ -62,7 +71,6 @@ func cleanupBatch(vk valkey.Client, batch []*url.URL) error {
 	}
 
 	// @TODO use a domain label when you fix your metrics... stupid..
-	metrics.IncrCounter([]string{"crawled_count"}, float32(common.Options.BatchSize))
 
 	return nil
 }

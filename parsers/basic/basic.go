@@ -66,7 +66,7 @@ func (p Basic) Fetch(u string, ctx context.Context) ([]byte, error) {
 	return append(mime, bodyBytes...), err
 }
 
-func (p Basic) ParsePage(data []byte, original *url.URL, ctx context.Context) (links []*url.URL, text []byte, err error) {
+func (p Basic) ParsePage(data []byte, original *url.URL) (links []*url.URL, text []byte, err error) {
 	mime := string(bytes.Trim(data[:MAX_MIME_BYTES], "\x00"))
 	data = data[MAX_MIME_BYTES:]
 
@@ -84,5 +84,5 @@ func (p Basic) ParsePage(data []byte, original *url.URL, ctx context.Context) (l
 		return p.parseHtml(data, original)
 	}
 
-	return nil, nil, fmt.Errorf("could not find parse mime type: %v", mime)
+	return nil, nil, fmt.Errorf("unable to find parse mime type: %v", mime)
 }

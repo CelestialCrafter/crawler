@@ -71,19 +71,20 @@ func populateInitialUrls(vk valkey.Client) error {
 		return nil
 	}
 
-	err = vk.Do(
+	for _, resp := range vk.DoMulti(
 		context.Background(),
+		vk.B().Del().Key("queue").Build(),
 		vk.
 			B().
 			Sadd().
 			Key("queue").
 			Member(common.Options.InitialPages...).
 			Build(),
-	).Error()
-
-	if err != nil {
-		return err
+	) {
+		err := resp.Error()
+		if err != nil {
+			return err
+		}
 	}
-
 	return nil
 }

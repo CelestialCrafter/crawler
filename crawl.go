@@ -1,41 +1,25 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
-	"sync"
 	"time"
 
 	"github.com/CelestialCrafter/crawler/common"
 	"github.com/CelestialCrafter/crawler/parsers"
-	"github.com/benjaminestes/robots"
 	"github.com/charmbracelet/log"
 	"github.com/hashicorp/go-metrics"
 	"github.com/puzpuzpuz/xsync/v3"
+	"github.com/temoto/robotstxt"
 )
 
 // global maps
-type robotsMutex struct {
-	robots *robots.Robots
-	mutex  *sync.Mutex
-}
-
-var robotsMap = map[string]robotsMutex{}
+var robotsMap = xsync.NewMapOf[string, *robotstxt.Group]()
 var crawlDelayMap = xsync.NewMapOf[string, time.Time]()
-
-func preflight(batch []*url.URL) {
-	for _, u := range batch {
-		robotsMap[u.Hostname()] = robotsMutex{
-			mutex: new(sync.Mutex),
-		}
-	}
-}
 
 func newCrawlLogger(u string, worker int) *log.Logger {
 	return log.WithPrefix("crawler").With("url", u, "worker", worker)
@@ -45,73 +29,52 @@ func encodeUrl(urlString string) string {
 	return base64.URLEncoding.EncodeToString([]byte(urlString))
 }
 
-func fetchRobots(u *url.URL) (*robots.Robots, error) {
-	robotsLocation, err := robots.Locate(u.String())
-	if err != nil {
-		return nil, err
-	}
-	res, err := http.Get(robotsLocation)
+func fetchRobots(u *url.URL, ctx context.Context) (*robotstxt.Group, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprint(u.Scheme, "://", u.Host, "/robots.txt"), nil)
 	if err != nil {
 		return nil, err
 	}
 
-	bodyBytes, err := io.ReadAll(res.Body)
+	req.Header.Add("User-Agent", common.Options.UserAgent)
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
-	res.Body.Close()
-
-	// robots.parseStart crashes if there are no tokens returned from lex()
-	if len(bodyBytes) < 10 {
-		return nil, errors.New("not enough bytes in robots.txt to consider parsing")
-	}
-
-	r, err := robots.From(res.StatusCode, bytes.NewReader(bodyBytes))
+	// @TODO support multi port robots
+	defer resp.Body.Close()
+	robots, err := robotstxt.FromResponse(resp)
 	if err != nil {
 		return nil, err
 	}
 
-	return r, nil
+	group := robots.FindGroup(common.Options.UserAgent)
+
+	return group, nil
 }
 
 func crawlAllowed(u *url.URL, ctx context.Context) error {
-	crawlerLog := common.LoggerFromContext(ctx)
-
 	// @FIX ignore robots.txt data past 500kb (https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt#file-format)
 	// @TODO use noindex maybe? (https://developers.google.com/search/docs/crawling-indexing/block-indexing)
-
 	if !common.Options.RespectRobots {
 		return nil
 	}
 
-	robotsHost, ok := robotsMap[u.Host]
-	if !ok {
-		log.Fatal("robotsMap field un-initialized", "key", u.Host)
-	}
+	crawlerLog := common.LoggerFromContext(ctx)
 
-	if robotsHost.robots == nil {
-		log.Error(robotsHost)
-		robotsHost.mutex.Lock()
+	robotsHost, _ := robotsMap.LoadOrCompute(u.Host, func() *robotstxt.Group {
 		start := time.Now()
-		r, err := fetchRobots(u)
+		g, err := fetchRobots(u, ctx)
 		if err != nil {
-			robotsHost.robots = &robots.Robots{}
-		} else {
-			robotsHost.robots = r
+			crawlerLog.Error("unable to fetch robots.txt", "error", err, "duration", time.Since(start))
+			return &robotstxt.Group{}
 		}
 
-		robotsMap[u.Host] = robotsHost
-		robotsHost.mutex.Unlock()
 		crawlerLog.Debug("fetched robots.txt", "duration", time.Since(start))
-	}
+		return g
+	})
 
-	var skipRobots bool
-	// extremely scuffed but.. fuck it we ball
-	if fmt.Sprint(robotsHost.robots) == "&{false <nil>}" {
-		skipRobots = true
-	}
-
-	if skipRobots || !robotsHost.robots.Test(common.Options.UserAgent, u.String()) {
+	if !robotsHost.Test(u.String()) {
 		return errors.New("url was disalowed by robots")
 	}
 
@@ -129,14 +92,9 @@ func worker(i int, queue *[]*url.URL, parser parsers.Parser, writer func([]strin
 
 		err := func(u *url.URL) error {
 			if common.Options.DefaultCrawlDelay != time.Second*0 {
-				err := crawlAllowed(u, ctx)
-				if err != nil {
-					return err
-				}
-
 				var oldCrawlTime time.Time
 				crawlDelayMap.Compute(
-					u.Hostname(),
+					u.Host,
 					func(oldValue time.Time, loaded bool) (newValue time.Time, delete bool) {
 						delete = false
 						oldCrawlTime = oldValue
@@ -164,6 +122,11 @@ func worker(i int, queue *[]*url.URL, parser parsers.Parser, writer func([]strin
 			ctx, cancel := context.WithTimeout(ctx, common.Options.CrawlTimeout)
 			defer cancel()
 
+			err := crawlAllowed(u, ctx)
+			if err != nil {
+				return err
+			}
+
 			fetchStart := time.Now()
 			htm, err := parser.Fetch(urlString, ctx)
 			if err != nil {
@@ -172,8 +135,7 @@ func worker(i int, queue *[]*url.URL, parser parsers.Parser, writer func([]strin
 			metrics.MeasureSince([]string{"fetch"}, fetchStart)
 			kb := float32(len(htm)) / 1000
 
-			parseStart := time.Now()
-			urls, text, err := parser.ParsePage(htm, u, ctx)
+			urls, text, err := parser.ParsePage(htm, u)
 			if err != nil {
 				return err
 			}
@@ -183,10 +145,9 @@ func worker(i int, queue *[]*url.URL, parser parsers.Parser, writer func([]strin
 				urlsString[i] = u.String()
 			}
 
-			metrics.MeasureSince([]string{"parse"}, parseStart)
-
 			// @TODO change .txt to match the mime of the page (support .pdfs, .jpg/.png, ect)
-			writer(urlsString, fmt.Sprintf("%s/%s.txt", u.Hostname(), encodeUrl(urlString)), text)
+			writer(urlsString, fmt.Sprintf("%s/%s.txt", u.Host, encodeUrl(urlString)), text)
+
 			crawlerLog.Debug("crawled page", "urls", len(urls), "kb", kb, "duration", time.Since(fetchStart))
 
 			return nil

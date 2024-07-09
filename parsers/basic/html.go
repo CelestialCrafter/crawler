@@ -80,7 +80,7 @@ func (p Basic) parseHtml(data []byte, original *url.URL) (links []*url.URL, text
 
 				url, err := url.Parse(strings.TrimSpace(string(link)))
 				if err != nil {
-					p.logger.Warn("could not parse url", "error", err, "href", string(link))
+					p.logger.Warn("unable to parse url", "error", err, "href", string(link))
 					continue
 				}
 

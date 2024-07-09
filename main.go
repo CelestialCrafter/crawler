@@ -48,13 +48,13 @@ func main() {
 	if common.Options.EnablePprof {
 		pf, err := os.Create(common.Options.PprofPath)
 		if err != nil {
-			log.Fatal("could not open pprof file", "error", err)
+			log.Fatal("unable to open pprof file", "error", err)
 			return
 		}
 
 		err = pprof.StartCPUProfile(pf)
 		if err != nil {
-			log.Fatal("could not start cpu profile", "error", err)
+			log.Fatal("unable to start cpu profile", "error", err)
 		}
 		defer pprof.StopCPUProfile()
 	}
@@ -62,7 +62,7 @@ func main() {
 	if common.Options.EnablePyroscope {
 		_, err := pyroscope.Start(pyroscope.Config{
 			ApplicationName: "crawler",
-			ServerAddress:   common.Options.PyroscopeAddr,
+			ServerAddress:   common.Options.PyroscopeURI,
 			Logger:          pyroscope.StandardLogger,
 			UploadRate:      5 * time.Second,
 		})
@@ -75,10 +75,10 @@ func main() {
 
 	// valkey
 	vk, err := valkey.NewClient(valkey.ClientOption{
-		InitAddress: []string{"127.0.0.1:6379"},
+		InitAddress: []string{common.Options.ValkeyAddr},
 	})
 	if err != nil {
-		log.Fatal("could not connect to valkey", "error", err)
+		log.Fatal("unable to connect to valkey", "error", err)
 	}
 
 	defer vk.Close()
@@ -116,7 +116,7 @@ func main() {
 
 		err = loadNewBatch(vk, &queue)
 		if err != nil {
-			log.Fatal("could not load new batches", "error", err)
+			log.Fatal("unable to load new batches", "error", err)
 		}
 
 		queueCopy = queue
@@ -126,7 +126,6 @@ func main() {
 			break
 		}
 
-		preflight(queue)
 		for i := range common.Options.Workers {
 			wg.Add(1)
 
@@ -139,7 +138,7 @@ func main() {
 					newUrls = append(newUrls, urls...)
 					err := writeTar(cw, s, b)
 					if err != nil {
-						log.Error("could not write to tar", "error", err)
+						log.Error("unable to write to tar", "error", err)
 					}
 				})
 			}(i)
@@ -148,12 +147,12 @@ func main() {
 		wg.Wait()
 		err := cleanupBatch(vk, queueCopy)
 		if err != nil {
-			log.Fatal("could not clean up batch", "error", err)
+			log.Fatal("unable to clean up batch", "error", err)
 		}
 
 		err = writeNewQueue(vk, &newUrls)
 		if err != nil {
-			log.Fatal("could not write aggregated data", "error", err)
+			log.Fatal("unable to write aggregated data", "error", err)
 		}
 
 		log.Info("batch finished", "duration", time.Since(start))

@@ -1,6 +1,6 @@
 module github.com/CelestialCrafter/crawler
 
-go 1.22.3
+go 1.22.5
 
 require (
 	github.com/benjaminestes/robots v2.0.4+incompatible
@@ -38,6 +38,7 @@ require (
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
+	github.com/temoto/robotstxt v1.1.2 // indirect
 	golang.org/x/sys v0.21.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect

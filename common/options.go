@@ -8,8 +8,7 @@ import (
 )
 
 type OptionsStructure struct {
-	DatabasePath   string
-	FrontierPath   string
+	ValkeyAddr     string
 	CrawledTarPath string
 
 	LogLevel          log.Level
@@ -25,7 +24,7 @@ type OptionsStructure struct {
 	PprofPath   string
 
 	EnablePyroscope bool
-	PyroscopeAddr   string
+	PyroscopeURI    string
 
 	EnableMetrics      bool
 	PrometheusPushAddr string
@@ -43,7 +42,6 @@ func LoadOptions() (OptionsStructure, error) {
 		return OptionsStructure{}, err
 	}
 
-	pathsSection := optionsIni.Section("paths")
 	settingsSection := optionsIni.Section("settings")
 	performanceSection := optionsIni.Section("performance")
 	blankSection := optionsIni.Section("")
@@ -54,8 +52,8 @@ func LoadOptions() (OptionsStructure, error) {
 	}
 
 	Options = OptionsStructure{
-		DatabasePath:   pathsSection.Key("database_path").MustString("data/database.db"),
-		CrawledTarPath: pathsSection.Key("crawled_tar_path").MustString("data/crawled.tar"),
+		ValkeyAddr:     blankSection.Key("valkey_addr").MustString("localhost:6379"),
+		CrawledTarPath: blankSection.Key("crawled_tar_path").MustString("data/crawled.tar"),
 
 		LogLevel:          logLevel,
 		UserAgent:         settingsSection.Key("user_agent").MustString("Mozilla/5.0 (compatible; Crawler/1.0; +http://www.google.com/bot.html)"),
@@ -70,7 +68,7 @@ func LoadOptions() (OptionsStructure, error) {
 		PprofPath:   performanceSection.Key("pprof_path").MustString("data/crawler.prof"),
 
 		EnablePyroscope: performanceSection.Key("enable_pyroscope").MustBool(false),
-		PyroscopeAddr:   performanceSection.Key("pyroscope_addr").MustString("http://localhost:4040"),
+		PyroscopeURI:    performanceSection.Key("pyroscope_uri").MustString("http://localhost:4040"),
 
 		EnableMetrics:      performanceSection.Key("enable_metrics").MustBool(false),
 		PrometheusPushAddr: performanceSection.Key("prometheus_push_addr").MustString(":9091"),
