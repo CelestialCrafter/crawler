@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 
 	"github.com/CelestialCrafter/crawler/common"
@@ -47,16 +46,6 @@ func (p Basic) Fetch(u string, ctx context.Context) ([]byte, error) {
 		contentType = "application/octet-stream"
 	}
 
-	contentType = strings.Split(contentType, ";")[0]
-	if !slices.Contains([]string{
-		"text/html",
-		"text/plain",
-		"application/pdf",
-		"application/rtf",
-	}, contentType) {
-		return nil, fmt.Errorf("content type header did not match the mime type whitelist: %v", contentType)
-	}
-
 	bodyBytes, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, err
@@ -64,7 +53,7 @@ func (p Basic) Fetch(u string, ctx context.Context) ([]byte, error) {
 
 	res.Body.Close()
 
-	contentTypeBytes := []byte(contentType)
+	contentTypeBytes := []byte(strings.Split(contentType, ";")[0])
 	mime := make([]byte, MAX_MIME_BYTES)
 	copy(mime, contentTypeBytes)
 
@@ -78,16 +67,11 @@ func (p Basic) ParsePage(data []byte, original *url.URL) (links []*url.URL, text
 	switch m {
 	case "text/html":
 		return p.parseHtml(data, original)
-	case "text/plain":
-		return p.parseText(data, original)
-	case "text/markdown":
-		return p.parseText(data, original)
 	case "application/pdf":
 		return p.parsePdf(data, original)
-	case "application/rdf":
-	default:
-		return p.parseHtml(data, original)
+	case "text/plain", "text/markdown", "image/jpeg", "image/png", "image/webp":
+		return p.parseUnchanged(data, original)
 	}
 
-	return nil, nil, fmt.Errorf("unable to find parse mime type: %v", m)
+	return nil, nil, fmt.Errorf("unable to find parser for mime type: %v", m)
 }

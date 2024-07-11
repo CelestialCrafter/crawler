@@ -36,6 +36,10 @@ type crawlData struct {
 	text      []byte
 }
 
+func (c crawlData) String() string {
+	return c.url.String()
+}
+
 func crawlPipeline(parser parsers.Parser, batch []*url.URL) (newUrls []*url.URL) {
 	workers := common.Options.Workers
 	metricsEnabled := true

@@ -52,7 +52,7 @@ func populateInitialUrls(vk valkey.Client) error {
 
 	for _, resp := range vk.DoMulti(
 		context.Background(),
-		vk.B().Del().Key("queue").Build(),
+		vk.B().Del().Key("queue").Key("crawled").Build(),
 		vk.
 			B().
 			Sadd().

@@ -21,10 +21,23 @@ func writeNewQueue(vk valkey.Client, newUrls *[]string) error {
 		return nil
 	}
 
-	vk.Do(context.Background(), vk.
-		B().
-		Sadd().
-		Key("queue").Member(*newUrls...).Build())
+	vk.DoMulti(
+		context.Background(),
+		vk.
+			B().
+			Sadd().
+			Key("queue").
+			Member(*newUrls...).
+			Build(),
+		// filter out urls that have been crawled
+		vk.
+			B().
+			Sdiffstore().
+			Destination("queue").
+			Key("queue").
+			Key("crawled").
+			Build(),
+	)
 
 	*newUrls = make([]string, 0)
 	return nil

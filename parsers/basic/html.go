@@ -20,7 +20,6 @@ var whitelistedTextTags = []string{
 	"h6",
 	"blockquote",
 	"dd",
-	"div",
 	"dl",
 	"dt",
 	"figcaption",

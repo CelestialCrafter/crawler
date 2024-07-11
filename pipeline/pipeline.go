@@ -54,10 +54,12 @@ func logMetrics(worker int, start time.Time, name string, metricsEnabled bool) {
 }
 
 func Work[I any, O any](opts WorkOptions[I, O]) <-chan Result[O] {
+	logger := log.With("name", opts.Name)
 	output := make(chan Result[O], opts.Workers)
 	var wg sync.WaitGroup
 
 	process := func(worker int, item Result[I]) {
+		logger.With("worker", worker)
 		start := time.Now()
 		if item.Err != nil {
 			output <- Result[O]{
@@ -69,9 +71,9 @@ func Work[I any, O any](opts WorkOptions[I, O]) <-chan Result[O] {
 
 		raw, err := opts.Process(*item.Item)
 		if err != nil {
-			log.Debug("unable to process item", "error", err)
+			logger.Debug("unable to process item", "error", err)
 		} else {
-			log.Debug("processed item", "item", raw, "worker", worker)
+			logger.Debug("processed item", "item", raw, "worker", worker)
 			logMetrics(worker, start, opts.Name, opts.MetricsEnabled)
 
 		}
@@ -83,18 +85,22 @@ func Work[I any, O any](opts WorkOptions[I, O]) <-chan Result[O] {
 	}
 	worker := func(worker int) {
 		defer wg.Done()
+
 		for item := range opts.Input {
 			process(worker, item)
 		}
+		log.Debug("worker exiting", "name", opts.Name, "worker", worker)
 	}
 
-	wg.Add(opts.Workers)
 	for i := 0; i < opts.Workers; i++ {
+		wg.Add(1)
 		go worker(i)
 	}
 
-	wg.Wait()
-	close(output)
+	go func() {
+		wg.Wait()
+		close(output)
+	}()
 
 	return output
 }
