@@ -27,7 +27,6 @@ func fetchRobots(u *url.URL, ctx context.Context) (*robotstxt.Group, error) {
 	if err != nil {
 		return nil, err
 	}
-	// @TODO support multi port robots
 	defer resp.Body.Close()
 	robots, err := robotstxt.FromResponse(resp)
 	if err != nil {

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"archive/tar"
 	"context"
 	"os"
 	"runtime/pprof"
@@ -82,7 +81,7 @@ func main() {
 	defer vk.Close()
 
 	// i/o init
-	err = os.MkdirAll("data/", 0644)
+	err = os.MkdirAll("data/", 0755)
 	if err != nil {
 		log.Fatal("unable to create data/ directory", "error", err)
 	}
@@ -92,14 +91,10 @@ func main() {
 		log.Fatal("unable to populate database with initial urls", "error", err)
 	}
 
-	cf, err := os.Create(common.Options.CrawledTarPath)
+	err = os.MkdirAll(common.Options.CrawledPath, 0755)
 	if err != nil {
-		log.Fatal("unable to open crawled tarball", "error", err)
+		log.Fatal("unable to create crawled directory", "error", err)
 	}
-	defer cf.Close()
-
-	cw := tar.NewWriter(cf)
-	defer cw.Close()
 
 	// crawl loop
 	parser := basic.New()

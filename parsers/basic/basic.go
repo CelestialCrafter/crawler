@@ -42,6 +42,11 @@ func (p Basic) Fetch(u string, ctx context.Context) ([]byte, error) {
 	}
 
 	contentType := res.Header.Get("content-type")
+	if contentType == "" {
+		// https://www.rfc-editor.org/rfc/rfc9110.html#section-8.3-5
+		contentType = "application/octet-stream"
+	}
+
 	contentType = strings.Split(contentType, ";")[0]
 	if !slices.Contains([]string{
 		"text/html",
@@ -67,10 +72,10 @@ func (p Basic) Fetch(u string, ctx context.Context) ([]byte, error) {
 }
 
 func (p Basic) ParsePage(data []byte, original *url.URL) (links []*url.URL, text []byte, err error) {
-	mime := string(bytes.Trim(data[:MAX_MIME_BYTES], "\x00"))
+	m := string(bytes.Trim(data[:MAX_MIME_BYTES], "\x00"))
 	data = data[MAX_MIME_BYTES:]
 
-	switch mime {
+	switch m {
 	case "text/html":
 		return p.parseHtml(data, original)
 	case "text/plain":
@@ -84,5 +89,5 @@ func (p Basic) ParsePage(data []byte, original *url.URL) (links []*url.URL, text
 		return p.parseHtml(data, original)
 	}
 
-	return nil, nil, fmt.Errorf("unable to find parse mime type: %v", mime)
+	return nil, nil, fmt.Errorf("unable to find parse mime type: %v", m)
 }

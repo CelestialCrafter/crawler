@@ -1,0 +1,14 @@
+syntax = "proto3";
+package crawler;
+
+import "google/protobuf/timestamp.proto";
+option go_package = "/protos";
+
+message Crawled {
+	string url = 1;
+	repeated string children = 2;
+	optional google.protobuf.Timestamp crawledAt = 3;
+	string mime = 4;
+	bytes original = 5;
+	bytes text = 6;
+}

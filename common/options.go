@@ -8,8 +8,8 @@ import (
 )
 
 type OptionsStructure struct {
-	ValkeyAddr     string
-	CrawledTarPath string
+	ValkeyAddr  string
+	CrawledPath string
 
 	LogLevel          log.Level
 	UserAgent         string
@@ -52,8 +52,8 @@ func LoadOptions() (OptionsStructure, error) {
 	}
 
 	Options = OptionsStructure{
-		ValkeyAddr:     blankSection.Key("valkey_addr").MustString("localhost:6379"),
-		CrawledTarPath: blankSection.Key("crawled_tar_path").MustString("data/crawled.tar"),
+		ValkeyAddr:  blankSection.Key("valkey_addr").MustString("localhost:6379"),
+		CrawledPath: blankSection.Key("crawled_path").MustString("data/crawled/"),
 
 		LogLevel:          logLevel,
 		UserAgent:         settingsSection.Key("user_agent").MustString("Mozilla/5.0 (compatible; Crawler/1.0; +http://www.google.com/bot.html)"),

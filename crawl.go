@@ -1,14 +1,23 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"net/url"
+	"os"
+	"path"
+	"time"
+
+	"github.com/charmbracelet/log"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/CelestialCrafter/crawler/common"
 	"github.com/CelestialCrafter/crawler/parsers"
+	"github.com/CelestialCrafter/crawler/parsers/basic"
 	"github.com/CelestialCrafter/crawler/pipeline"
-	"github.com/charmbracelet/log"
+	pb "github.com/CelestialCrafter/crawler/protos"
 )
 
 func encodeUrl(urlString string) string {
@@ -16,12 +25,14 @@ func encodeUrl(urlString string) string {
 }
 
 type crawlData struct {
-	ctx      context.Context
-	cancel   context.CancelFunc
-	url      *url.URL
-	children []*url.URL
-	original []byte
-	text     []byte
+	ctx       context.Context
+	cancel    context.CancelFunc
+	url       *url.URL
+	children  []*url.URL
+	crawledAt time.Time
+	mime      string
+	original  []byte
+	text      []byte
 }
 
 func crawlPipeline(parser parsers.Parser, batch []*url.URL) (newUrls []*url.URL) {
@@ -64,6 +75,7 @@ func crawlPipeline(parser parsers.Parser, batch []*url.URL) (newUrls []*url.URL)
 			return nil, err
 		}
 
+		data.crawledAt = time.Now()
 		data.original = pageData
 		return data, nil
 	})
@@ -74,13 +86,65 @@ func crawlPipeline(parser parsers.Parser, batch []*url.URL) (newUrls []*url.URL)
 			return nil, err
 		}
 
+		m := string(bytes.Trim(data.original[:basic.MAX_MIME_BYTES], "\x00"))
+		data.original = data.original[basic.MAX_MIME_BYTES:]
+
+		data.mime = m
 		data.text = text
 		data.children = links
 
 		return data, nil
 	})
 
-	for result := range parse {
+	write := pipeline.Work(parse, workers, func(data *crawlData) (*crawlData, error) {
+		childrenString := make([]string, len(data.children))
+		for i, u := range data.children {
+			childrenString[i] = u.String()
+		}
+
+		crawled := &pb.Crawled{
+			Url:       data.url.String(),
+			Children:  childrenString,
+			CrawledAt: timestamppb.New(data.crawledAt),
+			Mime:      data.mime,
+			Original:  data.original,
+			Text:      data.text,
+		}
+
+		output, err := proto.Marshal(crawled)
+		if err != nil {
+			return nil, err
+		}
+
+		hostPath := path.Join(common.Options.CrawledPath, data.url.Host)
+
+		_, err = os.Stat(hostPath)
+
+		if err != nil {
+			if os.IsNotExist(err) {
+				err := os.Mkdir(hostPath, 0755)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				return nil, err
+			}
+		}
+
+		err = os.WriteFile(
+			path.Join(hostPath, encodeUrl(data.url.Path)+".pb"),
+			output,
+			0644,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return data, nil
+	})
+
+	for result := range write {
 		if result.Err != nil {
 			log.Warn("error pipelining", "error", result.Err)
 			continue

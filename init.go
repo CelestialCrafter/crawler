@@ -1,7 +1,6 @@
 package main
 
 import (
-	"archive/tar"
 	"context"
 	"time"
 
@@ -12,26 +11,6 @@ import (
 
 	"github.com/CelestialCrafter/crawler/common"
 )
-
-func writeTar(tw *tar.Writer, name string, data []byte) error {
-	header := new(tar.Header)
-	header.Name = name
-	header.Size = int64(len(data))
-	header.Mode = 0644
-	header.ModTime = time.Now()
-
-	err := tw.WriteHeader(header)
-	if err != nil {
-		return err
-	}
-
-	_, err = tw.Write(data)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
 
 func startMetrics() {
 	var crawlerSink metrics.MetricSink
