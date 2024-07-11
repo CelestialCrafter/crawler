@@ -1,13 +1,25 @@
 package pipeline
 
 import (
+	"fmt"
+	"sync"
+	"time"
+
 	"github.com/charmbracelet/log"
-	"github.com/puzpuzpuz/xsync/v3"
+	"github.com/hashicorp/go-metrics"
 )
 
 type Result[I any] struct {
 	Err  error
 	Item *I
+}
+
+type WorkOptions[I any, O any] struct {
+	Input          <-chan Result[I]
+	Workers        int
+	Process        func(I) (O, error)
+	Name           string
+	MetricsEnabled bool
 }
 
 func Gen[I any](inputs ...I) <-chan Result[I] {
@@ -22,46 +34,67 @@ func Gen[I any](inputs ...I) <-chan Result[I] {
 	return output
 }
 
-func Work[I any, O any](
-	input <-chan Result[I],
-	workers int,
-	process func(I) (O, error),
-) <-chan Result[O] {
-	output := make(chan Result[O], workers)
-	exits := xsync.NewCounter()
+func logMetrics(worker int, start time.Time, name string, metricsEnabled bool) {
+	if metricsEnabled {
+		metrics.MeasureSinceWithLabels(
+			[]string{"pipeline_step"},
+			start,
+			[]metrics.Label{
+				{
+					Name:  "worker",
+					Value: fmt.Sprint(worker),
+				},
+				{
+					Name:  "name",
+					Value: name,
+				},
+			},
+		)
+	}
+}
 
-	worker := func(worker int) {
-		for item := range input {
-			if item.Err != nil {
-				output <- Result[O]{
-					Err:  item.Err,
-					Item: nil,
-				}
-				continue
-			}
+func Work[I any, O any](opts WorkOptions[I, O]) <-chan Result[O] {
+	output := make(chan Result[O], opts.Workers)
+	var wg sync.WaitGroup
 
-			raw, err := process(*item.Item)
-			if err != nil {
-				log.Debug("unable to process item", "error", err)
-			} else {
-				log.Debug("processed item", "item", raw, "worker", worker)
-			}
-
+	process := func(worker int, item Result[I]) {
+		start := time.Now()
+		if item.Err != nil {
 			output <- Result[O]{
-				Err:  err,
-				Item: &raw,
+				Err:  item.Err,
+				Item: nil,
 			}
+			return
 		}
-		exits.Add(1)
 
-		if exits.Value() == int64(workers) {
-			close(output)
+		raw, err := opts.Process(*item.Item)
+		if err != nil {
+			log.Debug("unable to process item", "error", err)
+		} else {
+			log.Debug("processed item", "item", raw, "worker", worker)
+			logMetrics(worker, start, opts.Name, opts.MetricsEnabled)
+
+		}
+
+		output <- Result[O]{
+			Err:  err,
+			Item: &raw,
+		}
+	}
+	worker := func(worker int) {
+		defer wg.Done()
+		for item := range opts.Input {
+			process(worker, item)
 		}
 	}
 
-	for i := 0; i < workers; i++ {
+	wg.Add(opts.Workers)
+	for i := 0; i < opts.Workers; i++ {
 		go worker(i)
 	}
+
+	wg.Wait()
+	close(output)
 
 	return output
 }

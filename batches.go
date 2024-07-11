@@ -5,7 +5,6 @@ import (
 	"net/url"
 
 	"github.com/charmbracelet/log"
-	"github.com/hashicorp/go-metrics"
 	"github.com/valkey-io/valkey-go"
 
 	"github.com/CelestialCrafter/crawler/common"
@@ -45,15 +44,6 @@ func cleanupBatch(vk valkey.Client, batch []*url.URL) error {
 
 	smoves := make(valkey.Commands, len(batch))
 	for i, u := range batch {
-		metrics.IncrCounterWithLabels(
-			[]string{"crawled_count"},
-			1,
-			[]metrics.Label{{
-				Name:  "domain",
-				Value: u.Hostname(),
-			}},
-		)
-
 		smoves[i] = vk.
 			B().
 			Smove().
