@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path"
 	"strings"
 
 	"github.com/CelestialCrafter/crawler/common"
@@ -21,6 +23,11 @@ type Basic struct {
 }
 
 func New() Basic {
+	err := os.MkdirAll(path.Join(common.Options.DataPath, "tmp"), 0755)
+	if err != nil {
+		log.Fatal("unable to create DataPath/tmp", "error", err)
+	}
+
 	return Basic{
 		client: &http.Client{},
 		logger: log.WithPrefix("parser/basic"),
@@ -38,6 +45,10 @@ func (p Basic) Fetch(u string, ctx context.Context) ([]byte, error) {
 	res, err := p.client.Do(req)
 	if err != nil {
 		return nil, err
+	}
+
+	if res.StatusCode >= 300 {
+		return nil, fmt.Errorf("recieved status code: %d", res.StatusCode)
 	}
 
 	contentType := res.Header.Get("content-type")
@@ -69,7 +80,7 @@ func (p Basic) ParsePage(data []byte, original *url.URL) (links []*url.URL, text
 		return p.parseHtml(data, original)
 	case "application/pdf":
 		return p.parsePdf(data, original)
-	case "text/plain", "text/markdown", "image/jpeg", "image/png", "image/webp":
+	case "text/plain", "text/markdown", "image/jpeg", "image/png", "image/webp", "image/gif":
 		return p.parseUnchanged(data, original)
 	}
 

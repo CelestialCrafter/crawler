@@ -12,6 +12,8 @@
         packages = with pkgs; [
           go
           valkey
+          protobuf
+          protoc-gen-go
           poppler_utils
         ];
       };

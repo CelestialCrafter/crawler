@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -41,6 +42,8 @@ func findHrefSrc(z *html.Tokenizer) ([]byte, bool) {
 	return nil, false
 }
 
+var whitespace = regexp.MustCompile(`\s+`)
+
 // note to self: don't put a context canceled check on this function
 // the time it takes to parse explodes
 func (p Basic) parseHtml(data []byte, original *url.URL) (links []*url.URL, text []byte, err error) {
@@ -53,7 +56,7 @@ func (p Basic) parseHtml(data []byte, original *url.URL) (links []*url.URL, text
 		case html.ErrorToken:
 			newErr := z.Err()
 			if errors.Is(newErr, io.EOF) {
-				text = removeExtraWhitespace(text)
+				text = whitespace.ReplaceAllLiteral(text, []byte(" "))
 				return
 			}
 

@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -34,16 +33,12 @@ func Gen[I any](inputs ...I) <-chan Result[I] {
 	return output
 }
 
-func logMetrics(worker int, start time.Time, name string, metricsEnabled bool) {
+func logMetrics(start time.Time, name string, metricsEnabled bool) {
 	if metricsEnabled {
 		metrics.MeasureSinceWithLabels(
 			[]string{"pipeline_step"},
 			start,
 			[]metrics.Label{
-				{
-					Name:  "worker",
-					Value: fmt.Sprint(worker),
-				},
 				{
 					Name:  "name",
 					Value: name,
@@ -74,7 +69,7 @@ func Work[I any, O any](opts WorkOptions[I, O]) <-chan Result[O] {
 			logger.Debug("unable to process item", "error", err)
 		} else {
 			logger.Debug("processed item", "item", raw, "worker", worker)
-			logMetrics(worker, start, opts.Name, opts.MetricsEnabled)
+			logMetrics(start, opts.Name, opts.MetricsEnabled)
 
 		}
 

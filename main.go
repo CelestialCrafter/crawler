@@ -1,8 +1,8 @@
 package main
 
 import (
-	"context"
 	"os"
+	"path"
 	"runtime/pprof"
 	"time"
 
@@ -14,34 +14,6 @@ import (
 	"github.com/CelestialCrafter/crawler/common"
 	"github.com/CelestialCrafter/crawler/parsers/basic"
 )
-
-func writeNewQueue(vk valkey.Client, newUrls *[]string) error {
-	if len(*newUrls) < 1 {
-		log.Warn("no new urls")
-		return nil
-	}
-
-	vk.DoMulti(
-		context.Background(),
-		vk.
-			B().
-			Sadd().
-			Key("queue").
-			Member(*newUrls...).
-			Build(),
-		// filter out urls that have been crawled
-		vk.
-			B().
-			Sdiffstore().
-			Destination("queue").
-			Key("queue").
-			Key("crawled").
-			Build(),
-	)
-
-	*newUrls = make([]string, 0)
-	return nil
-}
 
 func main() {
 	_, err := common.LoadOptions()
@@ -104,7 +76,7 @@ func main() {
 		log.Fatal("unable to populate database with initial urls", "error", err)
 	}
 
-	err = os.MkdirAll(common.Options.CrawledPath, 0755)
+	err = os.MkdirAll(path.Join(common.Options.DataPath, "crawled"), 0755)
 	if err != nil {
 		log.Fatal("unable to create crawled directory", "error", err)
 	}
@@ -125,6 +97,8 @@ func main() {
 			log.Warn("no new urls to be crawled; breaking.")
 			break
 		}
+
+		batch = distributeQueue(batch)
 
 		newUrlsUrl := crawlPipeline(parser, batch)
 		newUrls := make([]string, len(newUrlsUrl))

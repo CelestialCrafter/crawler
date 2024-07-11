@@ -10,6 +10,34 @@ import (
 	"github.com/CelestialCrafter/crawler/common"
 )
 
+func writeNewQueue(vk valkey.Client, newUrls *[]string) error {
+	if len(*newUrls) < 1 {
+		log.Warn("no new urls")
+		return nil
+	}
+
+	vk.DoMulti(
+		context.Background(),
+		vk.
+			B().
+			Sadd().
+			Key("queue").
+			Member(*newUrls...).
+			Build(),
+		// filter out urls that have been crawled
+		vk.
+			B().
+			Sdiffstore().
+			Destination("queue").
+			Key("queue").
+			Key("crawled").
+			Build(),
+	)
+
+	*newUrls = make([]string, 0)
+	return nil
+}
+
 func loadNewBatch(vk valkey.Client) ([]*url.URL, error) {
 	batch := make([]*url.URL, 0, common.Options.BatchSize)
 

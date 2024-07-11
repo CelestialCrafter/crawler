@@ -21,10 +21,6 @@ import (
 	pb "github.com/CelestialCrafter/crawler/protos"
 )
 
-func encodeUrl(urlString string) string {
-	return base64.URLEncoding.EncodeToString([]byte(urlString))
-}
-
 type crawlData struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -40,9 +36,14 @@ func (c crawlData) String() string {
 	return c.url.String()
 }
 
-func crawlPipeline(parser parsers.Parser, batch []*url.URL) (newUrls []*url.URL) {
+func crawlPipeline(parser parsers.Parser, batchU []*url.URL) (newUrls []*url.URL) {
 	workers := common.Options.Workers
 	metricsEnabled := true
+
+	batch := make([]*url.URL, 0)
+	for _, u := range batchU {
+		batch = append(batch, u)
+	}
 
 	queue := make([]*crawlData, len(batch))
 	for i, u := range batch {
@@ -153,7 +154,7 @@ func crawlPipeline(parser parsers.Parser, batch []*url.URL) (newUrls []*url.URL)
 				return nil, err
 			}
 
-			hostPath := path.Join(common.Options.CrawledPath, data.url.Host)
+			hostPath := path.Join(common.Options.DataPath, "crawled/", data.url.Host)
 
 			_, err = os.Stat(hostPath)
 
@@ -168,8 +169,12 @@ func crawlPipeline(parser parsers.Parser, batch []*url.URL) (newUrls []*url.URL)
 				}
 			}
 
+			if data.url.Path == "" {
+				data.url.Path = "/"
+			}
+
 			err = os.WriteFile(
-				path.Join(hostPath, encodeUrl(data.url.Path)+".pb"),
+				path.Join(hostPath, base64.URLEncoding.EncodeToString([]byte(data.url.Path))+".pb"),
 				output,
 				0644,
 			)
