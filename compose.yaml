@@ -1,0 +1,25 @@
+---
+include:
+  - metrics/compose.yaml
+services:
+  valkey:
+    image: valkey/valkey:7-alpine
+    command: redis-server --save 60 1 --loglevel warning
+    restart: always
+    hostname: valkey
+    ports:
+      - 6379:6379
+    networks:
+      - crawler
+    volumes:
+      - ./data:/data
+  crawler:
+    build: .
+    volumes:
+      - ./data:/app/data
+      - ./options.ini:/app/options.ini
+    networks:
+      - metrics
+      - crawler
+networks:
+  crawler:
