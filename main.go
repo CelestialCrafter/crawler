@@ -3,10 +3,8 @@ package main
 import (
 	"archive/tar"
 	"context"
-	"net/url"
 	"os"
 	"runtime/pprof"
-	"sync"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -105,47 +103,28 @@ func main() {
 
 	// crawl loop
 	parser := basic.New()
-	var queue []*url.URL
-	var queueCopy []*url.URL
-	newUrls := make([]string, 0)
 
 	var start time.Time
 	for {
 		start = time.Now()
-		var wg sync.WaitGroup
 
-		err = loadNewBatch(vk, &queue)
+		batch, err := loadNewBatch(vk)
 		if err != nil {
 			log.Fatal("unable to load new batches", "error", err)
 		}
 
-		queueCopy = queue
-
-		if len(queue) < 1 {
+		if len(batch) < 1 {
 			log.Warn("no new urls to be crawled; breaking.")
 			break
 		}
 
-		for i := range common.Options.Workers {
-			wg.Add(1)
-
-			go func(i int) {
-				defer func() {
-					wg.Done()
-				}()
-
-				worker(i, &queue, parser, func(urls []string, s string, b []byte) {
-					newUrls = append(newUrls, urls...)
-					err := writeTar(cw, s, b)
-					if err != nil {
-						log.Error("unable to write to tar", "error", err)
-					}
-				})
-			}(i)
+		newUrlsUrl := crawlPipeline(parser, batch)
+		newUrls := make([]string, len(newUrlsUrl))
+		for i, u := range newUrlsUrl {
+			newUrls[i] = u.String()
 		}
 
-		wg.Wait()
-		err := cleanupBatch(vk, queueCopy)
+		err = cleanupBatch(vk, batch)
 		if err != nil {
 			log.Fatal("unable to clean up batch", "error", err)
 		}

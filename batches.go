@@ -11,8 +11,8 @@ import (
 	"github.com/CelestialCrafter/crawler/common"
 )
 
-func loadNewBatch(vk valkey.Client, queue *[]*url.URL) error {
-	*queue = make([]*url.URL, 0, common.Options.BatchSize)
+func loadNewBatch(vk valkey.Client) ([]*url.URL, error) {
+	batch := make([]*url.URL, 0, common.Options.BatchSize)
 
 	newBatchString, err := vk.Do(context.Background(),
 		vk.
@@ -24,7 +24,7 @@ func loadNewBatch(vk valkey.Client, queue *[]*url.URL) error {
 	).AsStrSlice()
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, page := range newBatchString {
@@ -34,10 +34,10 @@ func loadNewBatch(vk valkey.Client, queue *[]*url.URL) error {
 			continue
 		}
 
-		*queue = append(*queue, u)
+		batch = append(batch, u)
 	}
 
-	return nil
+	return batch, nil
 }
 
 func cleanupBatch(vk valkey.Client, batch []*url.URL) error {
