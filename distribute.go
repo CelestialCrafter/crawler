@@ -1,6 +1,10 @@
 package main
 
-import "net/url"
+import (
+	"net/url"
+
+	"github.com/charmbracelet/log"
+)
 
 // ai generated, edited by me - claude 3.5 sonnet
 func distributeQueue(urls []*url.URL) []*url.URL {
@@ -38,5 +42,6 @@ func distributeQueue(urls []*url.URL) []*url.URL {
 		output[pos] = u
 	}
 
+	log.Fatal(output)
 	return output
 }
