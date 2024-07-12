@@ -29,7 +29,7 @@ func main() {
 
 	// profiling
 	if common.Options.EnablePprof {
-		pf, err := os.Create(common.Options.PprofPath)
+		pf, err := os.Create(path.Join(common.Options.DataPath, "crawler.prof"))
 		if err != nil {
 			log.Fatal("unable to open pprof file", "error", err)
 			return

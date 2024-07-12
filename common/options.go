@@ -59,16 +59,14 @@ func LoadOptions() (OptionsStructure, error) {
 		LogLevel:            logLevel,
 		QueuePrioritization: settingsSection.Key("queue_prioritization").MustString("mean"),
 		UserAgent:           settingsSection.Key("user_agent").MustString("Mozilla/5.0 (compatible; Crawler/1.0; +http://www.google.com/bot.html)"),
-		Workers:             settingsSection.Key("workers").MustInt(10),
-		BatchSize:           settingsSection.Key("batch_size").MustInt(20),
+		Workers:             settingsSection.Key("workers").MustInt(50),
+		BatchSize:           settingsSection.Key("batch_size").MustInt(100),
 		Recover:             settingsSection.Key("recover").MustBool(true),
 		CrawlTimeout:        settingsSection.Key("crawl_timeout").MustDuration(5 * time.Second),
 		DefaultCrawlDelay:   settingsSection.Key("default_crawl_delay").MustDuration(500 * time.Millisecond),
 		RespectRobots:       settingsSection.Key("respect_robots").MustBool(true),
 
-		EnablePprof: performanceSection.Key("enable_pprof").MustBool(false),
-		PprofPath:   performanceSection.Key("pprof_path").MustString("data/crawler.prof"),
-
+		EnablePprof:     performanceSection.Key("enable_pprof").MustBool(false),
 		EnablePyroscope: performanceSection.Key("enable_pyroscope").MustBool(false),
 		PyroscopeURI:    performanceSection.Key("pyroscope_uri").MustString("http://localhost:4040"),
 
