@@ -1,17 +1,13 @@
 package main
 
-import (
-	"net/url"
-
-	"github.com/charmbracelet/log"
-)
+import "net/url"
 
 // ai generated, edited by me - claude 3.5 sonnet
 func distributeQueue(urls []*url.URL) []*url.URL {
-	// Count occurrences of each hostname
-	hostnameCounts := make(map[string]int)
+	// Count occurrences of each host
+	hostCounts := make(map[string]int)
 	for _, u := range urls {
-		hostnameCounts[u.Hostname()]++
+		hostCounts[u.Host]++
 	}
 
 	// Calculate the size of the output array
@@ -21,20 +17,20 @@ func distributeQueue(urls []*url.URL) []*url.URL {
 	output := make([]*url.URL, outputSize)
 	positions := make(map[string][]int)
 
-	// Calculate ideal positions for each hostname
-	for hostname, count := range hostnameCounts {
+	// Calculate ideal positions for each host
+	for host, count := range hostCounts {
 		step := float64(outputSize) / float64(count)
-		positions[hostname] = make([]int, count)
+		positions[host] = make([]int, count)
 		for i := 0; i < count; i++ {
-			positions[hostname][i] = int(float64(i) * step)
+			positions[host][i] = int(float64(i) * step)
 		}
 	}
 
 	// Place URLs in their positions
 	for _, u := range urls {
-		hostname := u.Hostname()
-		pos := positions[hostname][0]
-		positions[hostname] = positions[hostname][1:] // Remove the used position
+		host := u.Host
+		pos := positions[host][0]
+		positions[host] = positions[host][1:] // Remove the used position
 
 		for output[pos] != nil {
 			pos = (pos + 1) % outputSize
@@ -42,6 +38,5 @@ func distributeQueue(urls []*url.URL) []*url.URL {
 		output[pos] = u
 	}
 
-	log.Fatal(output)
 	return output
 }

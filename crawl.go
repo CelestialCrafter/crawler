@@ -36,14 +36,9 @@ func (c crawlData) String() string {
 	return c.url.String()
 }
 
-func crawlPipeline(parser parsers.Parser, batchU []*url.URL) (newUrls []*url.URL) {
+func crawlPipeline(parser parsers.Parser, batch []*url.URL) (newUrls []*url.URL) {
 	workers := common.Options.Workers
 	metricsEnabled := true
-
-	batch := make([]*url.URL, 0)
-	for _, u := range batchU {
-		batch = append(batch, u)
-	}
 
 	queue := make([]*crawlData, len(batch))
 	for i, u := range batch {

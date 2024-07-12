@@ -11,31 +11,33 @@ import (
 var crawlDelayMap = xsync.NewMapOf[string, time.Time]()
 
 func sleepTillCrawlable(u *url.URL) {
-	if common.Options.DefaultCrawlDelay != time.Second*0 {
-		var oldCrawlTime time.Time
-		crawlDelayMap.Compute(
-			u.Host,
-			func(oldValue time.Time, loaded bool) (newValue time.Time, delete bool) {
-				delete = false
-				oldCrawlTime = oldValue
+	if common.Options.DefaultCrawlDelay == time.Second*0 {
+		return
+	}
 
-				var startingPoint time.Time
-				now := time.Now()
+	var oldCrawlTime time.Time
+	crawlDelayMap.Compute(
+		u.Host,
+		func(oldValue time.Time, loaded bool) (newValue time.Time, delete bool) {
+			delete = false
+			oldCrawlTime = oldValue
 
-				if oldValue.After(now) {
-					startingPoint = oldValue
-				} else {
-					startingPoint = now
-				}
+			var startingPoint time.Time
+			now := time.Now()
 
-				newValue = startingPoint.Add(common.Options.DefaultCrawlDelay)
+			if oldValue.After(now) {
+				startingPoint = oldValue
+			} else {
+				startingPoint = now
+			}
 
-				return
-			},
-		)
+			newValue = startingPoint.Add(common.Options.DefaultCrawlDelay)
 
-		if time.Now().Before(oldCrawlTime) {
-			time.Sleep(time.Until(oldCrawlTime))
-		}
+			return
+		},
+	)
+
+	if time.Now().Before(oldCrawlTime) {
+		time.Sleep(time.Until(oldCrawlTime))
 	}
 }

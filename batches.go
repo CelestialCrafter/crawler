@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 
 	"github.com/charmbracelet/log"
@@ -44,9 +45,12 @@ func loadNewBatch(vk valkey.Client) ([]*url.URL, error) {
 	newBatchString, err := vk.Do(context.Background(),
 		vk.
 			B().
-			Srandmember().
-			Key("queue").
-			Count(int64(common.Options.BatchSize)).
+			Fcall().
+			Function("QUEUESLICE").
+			Numkeys(0).
+			Arg(common.Options.QueuePrioritization).
+			Arg(fmt.Sprint(common.Options.BatchSize*5)).
+			Arg(fmt.Sprint(common.Options.BatchSize)).
 			Build(),
 	).AsStrSlice()
 

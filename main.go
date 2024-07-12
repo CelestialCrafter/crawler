@@ -1,13 +1,14 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path"
 	"runtime/pprof"
 	"time"
 
 	"github.com/charmbracelet/log"
-	"github.com/grafana/pyroscope-go"
+	pyroscope "github.com/grafana/pyroscope-go"
 
 	"github.com/valkey-io/valkey-go"
 
@@ -61,6 +62,25 @@ func main() {
 	})
 	if err != nil {
 		log.Fatal("unable to connect to valkey", "error", err)
+	}
+
+	queueVkScript, err := os.ReadFile("valkey-queue.lua")
+	if err != nil {
+		log.Fatal("unable to read valkey queue script", "error", err)
+	}
+
+	err = vk.Do(
+		context.Background(),
+		vk.
+			B().
+			FunctionLoad().
+			Replace().
+			FunctionCode(string(queueVkScript)).
+			Build(),
+	).Error()
+
+	if err != nil {
+		log.Fatal("unable to load valkey queue script", "error", err)
 	}
 
 	defer vk.Close()
