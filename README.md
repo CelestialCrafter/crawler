@@ -25,19 +25,19 @@ initial urls to crawl. default: [ "arxiv.org" ]
 
 #### data_path = string
 
-path to store data. default: data/
+path to store data. default: "data/"
 
 #### log_level = string
 
-log level. default: info
+log level. default: "info"
 
 #### queue_prioritization = string
 
-method for the queue to be sorted. default: mean
+method for the queue to be sorted. default: "mean"
 
 #### user_agent = string
 
-user agent. default: Mozilla/5.0 (compatible; Crawler/1.0; +[http://www.google.com/bot.html](http://www.google.com/bot.html))
+user agent. default: "Mozilla/5.0 (compatible; Crawler/1.0; +[http://www.google.com/bot.html](http://www.google.com/bot.html))"
 
 #### workers = int
 
@@ -68,7 +68,7 @@ wether to respect /robots.txt or not. default: true
 
 #### valkey_addr = string
 
-address to valkey-server. default: localhost:6379
+address to valkey-server. default: "localhost:6379"
 
 #### enable_pyroscope = bool
 
@@ -76,7 +76,7 @@ wether to monitor performance via pyroscope or not. default: false
 
 #### pyroscope_uri = string
 
-uri to the pyroscope server. default: [http://localhost:4040](http://localhost:4040)
+uri to the pyroscope server. default: "[http://localhost:4040](http://localhost:4040)"
 
 #### enable_metrics = bool
 
@@ -84,4 +84,4 @@ wether to monitor metrics via prometheus or not. default: false
 
 #### prometheus_push_addr = string
 
-address to the prometheus push server. default: :9091
+address to the prometheus push server. default: ":9091"
