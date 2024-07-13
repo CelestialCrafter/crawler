@@ -7,8 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
-	"path"
 	"strings"
 
 	"github.com/CelestialCrafter/crawler/common"
@@ -23,11 +21,6 @@ type Basic struct {
 }
 
 func New() Basic {
-	err := os.MkdirAll(path.Join(common.Options.DataPath, "tmp"), 0755)
-	if err != nil {
-		log.Fatal("unable to create DataPath/tmp", "error", err)
-	}
-
 	return Basic{
 		client: &http.Client{},
 		logger: log.WithPrefix("parser/basic"),

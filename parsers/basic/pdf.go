@@ -2,13 +2,13 @@ package basic
 
 import (
 	"encoding/base64"
+	"errors"
 	"net/url"
 	"os"
 	"os/exec"
 	"path"
 	"regexp"
 
-	"github.com/CelestialCrafter/crawler/common"
 	"github.com/charmbracelet/log"
 )
 
@@ -44,9 +44,13 @@ func findLinks(b []byte) []*url.URL {
 }
 
 func (p Basic) parsePdf(data []byte, original *url.URL) (links []*url.URL, text []byte, err error) {
+	tmpdir := os.ExpandEnv("$TMPDIR")
+	if tmpdir == "" {
+		return nil, nil, errors.New("$TMPDIR variable not set")
+	}
+
 	path := path.Join(
-		common.Options.DataPath,
-		"tmp",
+		tmpdir,
 		base64.StdEncoding.EncodeToString([]byte(original.String()))+".pdf",
 	)
 
