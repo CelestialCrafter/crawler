@@ -1,80 +1,85 @@
 package common
 
 import (
+	"reflect"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/charmbracelet/log"
-	"github.com/go-ini/ini"
 )
 
-type OptionsStructure struct {
-	ValkeyAddr string
-	DataPath   string
-
-	LogLevel            log.Level
-	UserAgent           string
-	QueuePrioritization string
-	Workers             int
-	BatchSize           int
-	Recover             bool
-	CrawlTimeout        time.Duration
-	DefaultCrawlDelay   time.Duration
-	RespectRobots       bool
-
-	EnablePprof bool
-	PprofPath   string
-
-	EnablePyroscope bool
-	PyroscopeURI    string
-
-	EnableMetrics      bool
-	PrometheusPushAddr string
-
-	InitialPages []string
+type logLevel struct {
+	log.Level
 }
 
-const OPTIONS_PATH = "options.ini"
+func (l *logLevel) UnmarshalText(text []byte) error {
+	var err error
+	l.Level, err = log.ParseLevel(string(text))
+	return err
+}
+
+type OptionsStructure struct {
+	InitialPages        []string      `toml:"initial_pages"`
+	DataPath            string        `toml:"data_path"`
+	LogLevel            logLevel      `toml:"log_level"`
+	UserAgent           string        `toml:"user_agent"`
+	QueuePrioritization string        `toml:"queue_prioritization"`
+	Workers             int           `toml:"workers"`
+	BatchSize           int           `toml:"batch_size"`
+	Recover             bool          `toml:"recover"`
+	CrawlTimeout        time.Duration `toml:"crawl_timeout"`
+	DefaultCrawlDelay   time.Duration `toml:"default_crawl_delay"`
+	RespectRobots       bool          `toml:"respect_robots"`
+
+	ValkeyAddr string `toml:"services_valkey_addr"`
+
+	EnablePyroscope bool   `toml:"services_enable_pyroscope"`
+	PyroscopeURI    string `toml:"services_pyroscope_uri"`
+
+	EnableMetrics      bool   `toml:"services_enable_metrics"`
+	PrometheusPushAddr string `toml:"services_prometheus_push_addr"`
+}
 
 var Options OptionsStructure
+var Default = OptionsStructure{
+	InitialPages:        []string{"https://arxiv.org"},
+	DataPath:            "data/",
+	LogLevel:            logLevel{Level: log.InfoLevel},
+	UserAgent:           "Mozilla/5.0 (compatible; Crawler/1.0; +http://www.google.com/bot.html)",
+	QueuePrioritization: "mean",
+	Workers:             50,
+	BatchSize:           100,
+	Recover:             true,
+	CrawlTimeout:        5 * time.Second,
+	DefaultCrawlDelay:   500 * time.Millisecond,
+	RespectRobots:       true,
+
+	ValkeyAddr: "localhost:6379",
+
+	EnablePyroscope: false,
+	PyroscopeURI:    "http://localhost:4040",
+
+	EnableMetrics:      false,
+	PrometheusPushAddr: ":9091",
+}
+
+const OPTIONS_PATH = "options.toml"
 
 func LoadOptions() (OptionsStructure, error) {
-	optionsIni, err := ini.Load(OPTIONS_PATH)
+	_, err := toml.DecodeFile(OPTIONS_PATH, &Options)
 	if err != nil {
 		return OptionsStructure{}, err
 	}
 
-	settingsSection := optionsIni.Section("settings")
-	performanceSection := optionsIni.Section("performance")
-	blankSection := optionsIni.Section("")
+	// set default values for keys not found in options file
+	t := reflect.ValueOf(&Options).Elem()
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		if !f.IsZero() {
+			continue
+		}
 
-	logLevel, err := log.ParseLevel(settingsSection.Key("log_level").MustString("info"))
-	if err != nil {
-		log.Fatal("unable to parse log level option")
-	}
-
-	Options = OptionsStructure{
-		ValkeyAddr: blankSection.Key("valkey_addr").MustString("localhost:6379"),
-		DataPath:   blankSection.Key("data_path").MustString("data/"),
-
-		LogLevel:            logLevel,
-		QueuePrioritization: settingsSection.Key("queue_prioritization").MustString("mean"),
-		UserAgent:           settingsSection.Key("user_agent").MustString("Mozilla/5.0 (compatible; Crawler/1.0; +http://www.google.com/bot.html)"),
-		Workers:             settingsSection.Key("workers").MustInt(50),
-		BatchSize:           settingsSection.Key("batch_size").MustInt(100),
-		Recover:             settingsSection.Key("recover").MustBool(true),
-		CrawlTimeout:        settingsSection.Key("crawl_timeout").MustDuration(5 * time.Second),
-		DefaultCrawlDelay:   settingsSection.Key("default_crawl_delay").MustDuration(500 * time.Millisecond),
-		RespectRobots:       settingsSection.Key("respect_robots").MustBool(true),
-
-		EnablePprof:     performanceSection.Key("enable_pprof").MustBool(false),
-		EnablePyroscope: performanceSection.Key("enable_pyroscope").MustBool(false),
-		PyroscopeURI:    performanceSection.Key("pyroscope_uri").MustString("http://localhost:4040"),
-
-		EnableMetrics:      performanceSection.Key("enable_metrics").MustBool(false),
-		PrometheusPushAddr: performanceSection.Key("prometheus_push_addr").MustString(":9091"),
-
-		// @NOTE length of initial pages MUST be under batch size * workers
-		InitialPages: blankSection.Key("initial").Strings(","),
+		f.Set(reflect.ValueOf(Default).Field(i))
 	}
 
 	return Options, nil

@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path"
-	"runtime/pprof"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -28,20 +27,6 @@ func main() {
 	log.SetDefault(logger)
 
 	// profiling
-	if common.Options.EnablePprof {
-		pf, err := os.Create(path.Join(common.Options.DataPath, "crawler.prof"))
-		if err != nil {
-			log.Fatal("unable to open pprof file", "error", err)
-			return
-		}
-
-		err = pprof.StartCPUProfile(pf)
-		if err != nil {
-			log.Fatal("unable to start cpu profile", "error", err)
-		}
-		defer pprof.StopCPUProfile()
-	}
-
 	if common.Options.EnablePyroscope {
 		_, err := pyroscope.Start(pyroscope.Config{
 			ApplicationName: "crawler",

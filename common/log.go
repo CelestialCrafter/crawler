@@ -9,11 +9,11 @@ import (
 var LogOptions = log.Options{
 	ReportTimestamp: true,
 	ReportCaller:    true,
-	Level:           Options.LogLevel,
+	Level:           Options.LogLevel.Level,
 }
 
 func RecalculateLogOptions() {
-	LogOptions.Level = Options.LogLevel
+	LogOptions.Level = Options.LogLevel.Level
 }
 
 type contextKey string
