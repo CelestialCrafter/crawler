@@ -7,7 +7,7 @@ web crawler!
 - Nix Flake (without metrics)
   1. Run `nix develop`
   2. Start `valkey-server`
-  3. (Optional) Run `protoc -I=. --go_out=protos/ protos_raw/*`
+  3. (Optional) Run `protoc -I=. --go_out=protos/ protos_raw/`
   4. go run .
 - Docker Compose
   1. Run `docker compose up`
@@ -19,89 +19,69 @@ web crawler!
 
 ### no section
 
-**initial = []string**
+#### initial_pages = []string
 
-*initial urls to crawl. example: arxiv.org*
+initial urls to crawl. default: [ "arxiv.org" ]
 
+#### data_path = string
 
-**valkey_addr = string**
+path to store data. default: data/
 
-*address to valkey-server. default: localhost:6379*
+#### log_level = string
 
+log level. default: info
 
-**data_path = string**
+#### queue_prioritization = string
 
-*path to store data. default: data/*
+method for the queue to be sorted. default: mean
 
+#### user_agent = string
 
-### settings section
+user agent. default: Mozilla/5.0 (compatible; Crawler/1.0; +[http://www.google.com/bot.html](http://www.google.com/bot.html))
 
-**log_level = string**
+#### workers = int
 
-*log level. default: info*
+workers to use in pipelines. default: 50
 
+#### batch_size = int
 
-**queue_prioritization = string**
+amount of urls to crawl before saving to valkey,
+and starting new pipeline. default: 100
 
-*method for the queue to be sorted. default: mean*
+#### recover = bool
 
+wether the database is cleared on start or not. default: true
 
-**user_agent = string**
+#### crawl_timeout = duration
 
-*user agent. default: Mozilla/5.0 (compatible; Crawler/1.0; +http://www.google.com/bot.html)*
+time before canceling crawl. default: 5s
 
+#### default_crawl_delay = duration
 
-**workers = int**
+delay between crawling hosts. default: 500ms
 
-*workers to use in pipelines. default: 50*
+#### respect_robots = bool
 
+wether to respect /robots.txt or not. default: true
 
-**batch_size = int**
+### services section
 
-*amount of urls to crawl before saving to valkey, and starting new pipeline. default: 100*
+#### valkey_addr = string
 
+address to valkey-server. default: localhost:6379
 
-**recover = bool**
+#### enable_pyroscope = bool
 
-*wether the database is cleared on start or not. default: true*
+wether to monitor performance via pyroscope or not. default: false
 
+#### pyroscope_uri = string
 
-**crawl_timeout = duration**
+uri to the pyroscope server. default: [http://localhost:4040](http://localhost:4040)
 
-*time before canceling crawl. default: 5s*
+#### enable_metrics = bool
 
+wether to monitor metrics via prometheus or not. default: false
 
-**default_crawl_delay = duration**
+#### prometheus_push_addr = string
 
-*delay between crawling hosts. default: 500ms*
-
-
-**respect_robots = bool**
-
-*wether to respect /robots.txt or not. default: true*
-
-
-## performance section
-
-**enable_pprof = bool**
-
-*wether to monitor performance via pprof or not. default: false*
-
-
-**enable_pyroscope = bool**
-
-*wether to monitor performance via pyroscope or not. default: false*
-
-
-**pyroscope_uri = string**
-
-*uri to the pyroscope server. default: http://localhost:4040*
-
-
-**enable_metrics = bool**
-
-*wether to monitor metrics via prometheus or not. default: false*
-
-**prometheus_push_addr = string**
-
-*address to the prometheus push server. default: :9091*
+address to the prometheus push server. default: :9091
