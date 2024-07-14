@@ -1,6 +1,7 @@
 # crawler
 
 web crawler!
+works well with [CelestialCrafter/search-engine](https://github.com/CelestialCrafter/search-engine)
 
 ## setup
 
