@@ -8,7 +8,7 @@ works well with [CelestialCrafter/search-engine](https://github.com/CelestialCra
 - Nix Flake (without metrics)
   1. Run `nix develop`
   2. Start `valkey-server`
-  3. (Optional) Run `protoc -I=. --go_out=protos/ protos_raw/`
+  3. (Optional) Run `protoc -I=. --go_out=protos/ protos_raw/*`
   4. go run .
 - Docker Compose
   1. Run `docker compose up`
