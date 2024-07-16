@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/url"
 
 	"github.com/charmbracelet/log"
 	"github.com/valkey-io/valkey-go"
@@ -39,10 +38,8 @@ func writeNewQueue(vk valkey.Client, newUrls *[]string) error {
 	return nil
 }
 
-func loadNewBatch(vk valkey.Client) ([]*url.URL, error) {
-	batch := make([]*url.URL, 0, common.Options.BatchSize)
-
-	newBatchString, err := vk.Do(context.Background(),
+func loadNewBatch(vk valkey.Client) ([]string, error) {
+	batch, err := vk.Do(context.Background(),
 		vk.
 			B().
 			Fcall().
@@ -58,30 +55,20 @@ func loadNewBatch(vk valkey.Client) ([]*url.URL, error) {
 		return nil, err
 	}
 
-	for _, page := range newBatchString {
-		u, err := url.Parse(page)
-		if err != nil {
-			log.Warn("unable to parse url", "url", page)
-			continue
-		}
-
-		batch = append(batch, u)
-	}
-
 	return batch, nil
 }
 
-func cleanupBatch(vk valkey.Client, batch []*url.URL) error {
+func cleanupBatch(vk valkey.Client, batch []string) error {
 	ctx := context.Background()
 
 	smoves := make(valkey.Commands, len(batch))
-	for i, u := range batch {
+	for i, urlString := range batch {
 		smoves[i] = vk.
 			B().
 			Smove().
 			Source("queue").
 			Destination("crawled").
-			Member(u.String()).
+			Member(urlString).
 			Build()
 	}
 

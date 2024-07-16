@@ -1,7 +1,6 @@
 package basic
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -10,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/CelestialCrafter/crawler/common"
+	pb "github.com/CelestialCrafter/crawler/protos"
 	"github.com/charmbracelet/log"
 )
 
@@ -27,21 +27,21 @@ func New() Basic {
 	}
 }
 
-func (p Basic) Fetch(u string, ctx context.Context) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
+func (p Basic) Fetch(data *pb.Document, ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, "GET", data.Url, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	req.Header.Add("User-Agent", common.Options.UserAgent)
 
 	res, err := p.client.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if res.StatusCode >= 300 {
-		return nil, fmt.Errorf("recieved status code: %d", res.StatusCode)
+		return fmt.Errorf("recieved status code: %d", res.StatusCode)
 	}
 
 	contentType := res.Header.Get("content-type")
@@ -52,30 +52,29 @@ func (p Basic) Fetch(u string, ctx context.Context) ([]byte, error) {
 
 	bodyBytes, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	res.Body.Close()
 
-	contentTypeBytes := []byte(strings.Split(contentType, ";")[0])
-	mime := make([]byte, MAX_MIME_BYTES)
-	copy(mime, contentTypeBytes)
+	mime := strings.Split(contentType, ";")[0]
+	data.Original = bodyBytes
+	data.Metadata.Mime = mime
 
-	return append(mime, bodyBytes...), err
+	return nil
 }
 
-func (p Basic) ParsePage(data []byte, original *url.URL) (links []*url.URL, text []byte, err error) {
-	m := string(bytes.Trim(data[:MAX_MIME_BYTES], "\x00"))
-	data = data[MAX_MIME_BYTES:]
+func (p Basic) ParsePage(data *pb.Document, original *url.URL) error {
+	mime := data.Metadata.Mime
 
-	switch m {
+	switch mime {
 	case "text/html":
 		return p.parseHtml(data, original)
 	case "application/pdf":
 		return p.parsePdf(data, original)
 	case "text/plain", "text/markdown", "image/jpeg", "image/png", "image/webp", "image/gif":
-		return p.parseUnchanged(data, original)
+		return nil
 	}
 
-	return nil, nil, fmt.Errorf("unable to find parser for mime type: %v", m)
+	return fmt.Errorf("unable to find parser for mime type: %v", mime)
 }

@@ -4,11 +4,20 @@ package crawler;
 import "google/protobuf/timestamp.proto";
 option go_package = "/protos";
 
-message Crawled {
-	string url = 1;
-	repeated string children = 2;
-	optional google.protobuf.Timestamp crawledAt = 3;
-	string mime = 4;
-	bytes original = 5;
-	bytes text = 6;
+message Metadata
+{
+  optional google.protobuf.Timestamp crawledAt = 1;
+  string mime = 2;
+  optional string description = 3;
+  optional string title = 4;
+  optional string site = 5;
+}
+
+message Document
+{
+  optional string url = 1;
+  repeated string children = 2;
+  bytes original = 3;
+  optional bytes text = 4;
+  Metadata metadata = 5;
 }

@@ -3,9 +3,11 @@ package parsers
 import (
 	"context"
 	"net/url"
+
+	pb "github.com/CelestialCrafter/crawler/protos"
 )
 
 type Parser interface {
-	Fetch(link string, ctx context.Context) (data []byte, err error)
-	ParsePage(data []byte, original *url.URL) (links []*url.URL, text []byte, err error)
+	Fetch(data *pb.Document, ctx context.Context) error
+	ParsePage(data *pb.Document, original *url.URL) error
 }

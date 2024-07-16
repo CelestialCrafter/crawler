@@ -103,13 +103,7 @@ func main() {
 			break
 		}
 
-		batch = distributeQueue(batch)
-
-		newUrlsUrl := crawlPipeline(parser, batch)
-		newUrls := make([]string, len(newUrlsUrl))
-		for i, u := range newUrlsUrl {
-			newUrls[i] = u.String()
-		}
+		newUrls := crawlPipeline(parser, batch)
 
 		err = cleanupBatch(vk, batch)
 		if err != nil {

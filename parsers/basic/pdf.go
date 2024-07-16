@@ -3,23 +3,24 @@ package basic
 import (
 	"encoding/base64"
 	"errors"
+	pb "github.com/CelestialCrafter/crawler/protos"
+	"github.com/charmbracelet/log"
 	"net/url"
 	"os"
 	"os/exec"
 	"path"
 	"regexp"
-
-	"github.com/charmbracelet/log"
 )
 
 var arxivRegex = regexp.MustCompile(`abs/\d{4}\.\d+`)
 var urlRegex = regexp.MustCompile(`^(https?|ftp)://[^\s/$.?#].[^\s]*$`)
 
-func findLinks(b []byte) []*url.URL {
+func findLinks(b []byte) []string {
 	arxivsBytes := arxivRegex.FindAll(b, -1)
+
 	linksBytes := arxivRegex.FindAll(b, -1)
-	arxivs := make([]*url.URL, len(arxivsBytes))
-	links := make([]*url.URL, len(linksBytes))
+	arxivs := make([]string, len(arxivsBytes))
+	links := make([]string, len(linksBytes))
 
 	for i, id := range arxivsBytes {
 		u, err := url.Parse("https://arxiv.org/" + string(id))
@@ -27,7 +28,7 @@ func findLinks(b []byte) []*url.URL {
 			log.Warn("unable to parse url", "url", u)
 		}
 
-		arxivs[i] = u
+		arxivs[i] = u.String()
 
 	}
 
@@ -37,16 +38,16 @@ func findLinks(b []byte) []*url.URL {
 			log.Warn("unable to parse url", "url", u)
 		}
 
-		links[i] = u
+		links[i] = u.String()
 	}
 
 	return append(arxivs, links...)
 }
 
-func (p Basic) parsePdf(data []byte, original *url.URL) (links []*url.URL, text []byte, err error) {
+func (p Basic) parsePdf(data *pb.Document, original *url.URL) error {
 	tmpdir := os.ExpandEnv("$TMPDIR")
 	if tmpdir == "" {
-		return nil, nil, errors.New("$TMPDIR variable not set")
+		return errors.New("$TMPDIR variable not set")
 	}
 
 	path := path.Join(
@@ -54,18 +55,20 @@ func (p Basic) parsePdf(data []byte, original *url.URL) (links []*url.URL, text 
 		base64.StdEncoding.EncodeToString([]byte(original.String()))+".pdf",
 	)
 
-	err = os.WriteFile(path, data, 0644)
+	err := os.WriteFile(path, data.Original, 0644)
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
 
 	stdout, err := exec.Command("pdftotext", path, "-nopgbrk", "-").Output()
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
 
 	// dont care about error, its just tmp cleanup
 	_ = os.Remove(path)
 
-	return findLinks(stdout), stdout, nil
+	data.Text = stdout
+	data.Children = findLinks(stdout)
+	return nil
 }
