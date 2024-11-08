@@ -1,7 +1,8 @@
 # crawler
 
+**this project is complete.**
+
 web crawler!
-works well with [CelestialCrafter/search-engine](https://github.com/CelestialCrafter/search-engine)
 
 ## setup
 
